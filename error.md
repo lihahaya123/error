@@ -131,3 +131,66 @@ the job to be terminated. The first process to do so was:
 --------------------------------------------------------------------------
 root@a9144439c186:/workspace# 
 ```
+
+3
+```
+2026-07-08 06:54:27,545 - mmdet3d - INFO - workflow: [('train', 1)], max: 20 epochs
+2026-07-08 06:54:27,549 - mmdet3d - INFO - Checkpoints will be saved to /workspace/runs/run-14e682de by $
+ardDiskBackend.
+Traceback (most recent call last):
+  File "tools/train.py", line 87, in <module>
+    main()
+  File "tools/train.py", line 76, in main
+    train_model(
+  File "/workspace/mmdet3d/apis/train.py", line 126, in train_model
+    runner.run(data_loaders, [("train", 1)])
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 127, in run
+    epoch_runner(data_loaders[i], **kwargs)
+  File "/workspace/mmdet3d/runner/epoch_based_runner.py", line 14, in train
+    super().train(data_loader, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 50, in train
+    self.run_iter(data_batch, train_mode=True, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 29, in run_iter
+    outputs = self.model.train_step(data_batch, self.optimizer,
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/parallel/distributed.py", line 52, in train_step
+    output = self.module.train_step(*inputs[0], **kwargs[0])
+  File "/workspace/mmdet3d/models/fusion_models/base.py", line 78, in train_step
+    losses = self(**data)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 253, in forward
+    outputs = self.forward_single(
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 332, in forward_single
+    x = self.fuser(features)
+File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/workspace/mmdet3d/models/fusers/conv.py", line 23, in forward
+    return super().forward(torch.cat(inputs, dim=1))
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/container.py", line 141, in forward
+    input = module(input)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 446, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 442, in _conv_forward
+    return F.conv2d(input, weight, bias, self.stride,
+RuntimeError: Given groups=1, weight of size [256, 336, 3, 3], expected input[1, 208, 75, 75] to have 336
+ channels, but got 208 channels instead
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[4849,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------
+root@a9144439c186:/workspace# 
+
+```
