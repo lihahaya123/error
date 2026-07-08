@@ -320,3 +320,37 @@ missing keys in source state_dict: encoders.camera.vtransform.dx, encoders.camer
 100% 40/40 [00:05<00:00,  6.84it/s]
 root@a9144439c186:/workspace# 
 ```
+
+8
+```
+root@a9144439c186:/workspace# CUDA_VISIBLE_DEVICES=2 torchpack dist-run -np 1 python tools/visualize.py  configs/nuscenes/seg/mytest-fusion-bev256d2-lss.yaml  --mode pred  --checkpoint /runs/run-2de6c3fa/latest.pth   --split val --out-dir results/mytest_habitat/viz  --map-score 0.5
+2026-07-08 10:56:13,597 - mmdet - INFO - load checkpoint from local path: pretrained/swin_tiny_patch4_window7_224.pth
+load checkpoint from local path: /runs/run-2de6c3fa/latest.pth
+Traceback (most recent call last):
+  File "tools/visualize.py", line 169, in <module>
+    main()
+  File "tools/visualize.py", line 76, in main
+    load_checkpoint(model, args.checkpoint, map_location="cpu")
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/checkpoint.py", line 531, in load_checkpoint
+    checkpoint = _load_checkpoint(filename, map_location, logger)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/checkpoint.py", line 470, in _load_checkpoint
+    return CheckpointLoader.load_checkpoint(filename, map_location, logger)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/checkpoint.py", line 249, in load_checkpoint
+    return checkpoint_loader(filename, map_location)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/checkpoint.py", line 265, in load_from_local
+    raise IOError(f'{filename} is not a checkpoint file')
+OSError: /runs/run-2de6c3fa/latest.pth is not a checkpoint file
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[21810,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------
+root@a9144439c186:/workspace# 
+
+```
