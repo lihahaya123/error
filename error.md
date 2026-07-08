@@ -194,3 +194,70 @@ the job to be terminated. The first process to do so was:
 root@a9144439c186:/workspace# 
 
 ```
+
+4
+```
+2026-07-08 06:58:30,740 - mmdet3d - INFO - workflow: [('train', 1)], max: 20 epochs
+2026-07-08 06:58:30,742 - mmdet3d - INFO - Checkpoints will be saved to /workspace/runs/run-ef6361d7 by H
+ardDiskBackend.
+Traceback (most recent call last):
+  File "tools/train.py", line 87, in <module>
+    main()
+  File "tools/train.py", line 76, in main
+    train_model(
+  File "/workspace/mmdet3d/apis/train.py", line 126, in train_model
+    runner.run(data_loaders, [("train", 1)])
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 127, in run
+    epoch_runner(data_loaders[i], **kwargs)
+  File "/workspace/mmdet3d/runner/epoch_based_runner.py", line 14, in train
+    super().train(data_loader, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 50, in train
+    self.run_iter(data_batch, train_mode=True, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/epoch_based_runner.py", line 29, in run_iter
+    outputs = self.model.train_step(data_batch, self.optimizer,
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/parallel/distributed.py", line 52, in train_step
+    output = self.module.train_step(*inputs[0], **kwargs[0])
+  File "/workspace/mmdet3d/models/fusion_models/base.py", line 78, in train_step
+    losses = self(**data)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 253, in forward
+    outputs = self.forward_single(
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 340, in forward_single
+    x = self.decoder["neck"](x)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 253, in forward
+    outputs = self.forward_single(
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/fusion_models/bevfusion.py", line 340, in forward_single
+    x = self.decoder["neck"](x)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1102, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/opt/conda/lib/python3.8/site-packages/mmcv/runner/fp16_utils.py", line 128, in new_func
+    output = old_func(*new_args, **new_kwargs)
+  File "/workspace/mmdet3d/models/necks/second.py", line 96, in forward
+    out = torch.cat(ups, dim=1)
+RuntimeError: Sizes of tensors must match except in dimension 1. Expected size 75 but got size 76 for ten
+sor number 1 in the list.
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[4429,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------
+root@a9144439c186:/workspace# 
+
+```
