@@ -354,3 +354,57 @@ the job to be terminated. The first process to do so was:
 root@a9144439c186:/workspace# 
 
 ```
+9
+```
+root@a9144439c186:/workspace# CUDA_VISIBLE_DEVICES=2 torchpack dist-run -np 1 python tools/visualize.py  
+configs/nuscenes/seg/mytest-fusion-bev256d2-lss.yaml  --mode pred  --checkpoint runs/run-2de6c3fa/latest.
+pth   --split val --out-dir results/mytest_habitat/viz  --map-score 0.5                                  
+2026-07-08 10:58:52,951 - mmdet - INFO - load checkpoint from local path: pretrained/swin_tiny_patch4_win
+dow7_224.pth
+load checkpoint from local path: runs/run-2de6c3fa/latest.pth
+The model and loaded state dict do not match exactly
+
+size mismatch for encoders.camera.vtransform.depthnet.weight: copying a param with shape torch.Size([178,
+ 256, 1, 1]) from checkpoint, the shape in current model is torch.Size([230, 256, 1, 1]).
+size mismatch for encoders.camera.vtransform.depthnet.bias: copying a param with shape torch.Size([178]) 
+from checkpoint, the shape in current model is torch.Size([230]).
+size mismatch for fuser.0.weight: copying a param with shape torch.Size([256, 208, 3, 3]) from checkpoint
+, the shape in current model is torch.Size([256, 336, 3, 3]).
+missing keys in source state_dict: encoders.camera.vtransform.dx, encoders.camera.vtransform.bx, encoders.camera.vtransform.nx, encoders.camera.vtransform.frustum
+
+Traceback (most recent call last):
+  File "tools/visualize.py", line 169, in <module>
+    main()
+  File "tools/visualize.py", line 79, in main
+    model.cuda(),
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 680, in cuda
+    return self._apply(lambda t: t.cuda(device))
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  [Previous line repeated 2 more times]
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 593, in _apply
+    param_applied = fn(param)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 680, in <lambda>
+    return self._apply(lambda t: t.cuda(device))
+RuntimeError: CUDA error: out of memory
+CUDA kernel errors might be asynchronously reported at some other API call,so the stacktrace below might 
+be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[23090,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------
+root@a9144439c186:/workspace# 
+
+```
