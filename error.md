@@ -261,3 +261,37 @@ the job to be terminated. The first process to do so was:
 root@a9144439c186:/workspace# 
 
 ```
+
+5
+```
+2026-07-08 07:16:37,266 - mmdet3d - INFO - Epoch(val) [19][40]  map/floor/iou@max: 0.9720, map/floor/iou$
+0.35: 0.9717, map/floor/iou@0.40: 0.9719, map/floor/iou@0.45: 0.9720, map/floor/iou@0.50: 0.9719, map/fl$
+or/iou@0.55: 0.9717, map/floor/iou@0.60: 0.9712, map/floor/iou@0.65: 0.9704, map/carpet/iou@max: 0.0000, 
+map/carpet/iou@0.35: 0.0000, map/carpet/iou@0.40: 0.0000, map/carpet/iou@0.45: 0.0000, map/carpet/iou@0.5
+0: 0.0000, map/carpet/iou@0.55: 0.0000, map/carpet/iou@0.60: 0.0000, map/carpet/iou@0.65: 0.0000, map/obs
+tacle/iou@max: 0.4335, map/obstacle/iou@0.35: 0.4304, map/obstacle/iou@0.40: 0.4335, map/obstacle/iou@0.4
+5: 0.4196, map/obstacle/iou@0.50: 0.3761, map/obstacle/iou@0.55: 0.3151, map/obstacle/iou@0.60: 0.2404, m
+ap/obstacle/iou@0.65: 0.1731, map/wall/iou@max: 0.0000, map/wall/iou@0.35: 0.0000, map/wall/iou@0.40: 0.0
+000, map/wall/iou@0.45: 0.0000, map/wall/iou@0.50: 0.0000, map/wall/iou@0.55: 0.0000, map/wall/iou@0.60: 
+0.0000, map/wall/iou@0.65: 0.0000, map/threshold/iou@max: 0.0000, map/threshold/iou@0.35: 0.0000, map/thr
+eshold/iou@0.40: 0.0000, map/threshold/iou@0.45: 0.0000, map/threshold/iou@0.50: 0.0000, map/threshold/io
+u@0.55: 0.0000, map/threshold/iou@0.60: 0.0000, map/threshold/iou@0.65: 0.0000, map/unknown/iou@max: 0.86
+39, map/unknown/iou@0.35: 0.8625, map/unknown/iou@0.40: 0.8634, map/unknown/iou@0.45: 0.8639, map/unknown
+/iou@0.50: 0.8626, map/unknown/iou@0.55: 0.8595, map/unknown/iou@0.60: 0.8541, map/unknown/iou@0.65: 0.8463, map/mean/iou@max: 0.37822026-07-08 07:16:48,570 - mmdet3d - INFO - Epoch [20][50/160]   lr: 8.234e-06, eta: 0:00:20, time: 0.226, data_time: 0.053, memory: 1959, loss/map/floor/focal: 0.0013, loss/map/carpet/focal: 0.0000, loss/map/o$stacle/focal: 0.0039, loss/map/wall/focal: 0.0000, loss/map/threshold/focal: 0.0000, loss/map/unknown/fo$al: 0.0052, loss: 0.0104, grad_norm: 0.02022026-07-08 07:16:57,360 - mmdet3d - INFO - Epoch [20][100/160]  lr: 2.498e-06, eta: 0:00:11, time: 0.176$ data_time: 0.006, memory: 1959, loss/map/floor/focal: 0.0015, loss/map/carpet/focal: 0.0000, loss/map/o$stacle/focal: 0.0033, loss/map/wall/focal: 0.0000, loss/map/threshold/focal: 0.0000, loss/map/unknown/fo$al: 0.0046, loss: 0.0094, grad_norm: 0.01992026-07-08 07:17:06,215 - mmdet3d - INFO - Epoch [20][150/160]  lr: 9.099e-08, eta: 0:00:01, time: 0.177$ data_time: 0.006, memory: 1959, loss/map/floor/focal: 0.0012, loss/map/carpet/focal: 0.0000, loss/map/o$stacle/focal: 0.0043, loss/map/wall/focal: 0.0000, loss/map/threshold/focal: 0.0000, loss/map/unknown/fo$al: 0.0054, loss: 0.0109, grad_norm: 0.0200
+2026-07-08 07:17:08,165 - mmdet3d - INFO - Saving checkpoint at 20 epochs
+[>>] 40/40, 8.0 task/s, elapsed: 5s, ETA:     0s   ] 0/40, elapsed: 0s, ETA:
+
+2026-07-08 07:17:15,156 - mmdet3d - INFO - Epoch(val) [20][40]  map/floor/iou@max: 0.9718, map/floor/iou$0.35: 0.9717, map/floor/iou@0.40: 0.9718, map/floor/iou@0.45: 0.9717, map/floor/iou@0.50: 0.9716, map/fl$or/iou@0.55: 0.9712, map/floor/iou@0.60: 0.9707, map/floor/iou@0.65: 0.9697, map/carpet/iou@max: 0.0000, map/carpet/iou@0.35: 0.0000, map/carpet/iou@0.40: 0.0000, map/carpet/iou@0.45: 0.0000, map/carpet/iou@0.$0: 0.0000, map/carpet/iou@0.55: 0.0000, map/carpet/iou@0.60: 0.0000, map/carpet/iou@0.65: 0.0000, map/obs
+tacle/iou@max: 0.4351, map/obstacle/iou@0.35: 0.4341, map/obstacle/iou@0.40: 0.4351, map/obstacle/iou@0.4
+5: 0.4186, map/obstacle/iou@0.50: 0.3753, map/obstacle/iou@0.55: 0.3132, map/obstacle/iou@0.60: 0.2408, m
+ap/obstacle/iou@0.65: 0.1747, map/wall/iou@max: 0.0000, map/wall/iou@0.35: 0.0000, map/wall/iou@0.40: 0.0
+000, map/wall/iou@0.45: 0.0000, map/wall/iou@0.50: 0.0000, map/wall/iou@0.55: 0.0000, map/wall/iou@0.60: 
+0.0000, map/wall/iou@0.65: 0.0000, map/threshold/iou@max: 0.0000, map/threshold/iou@0.35: 0.0000, map/thr
+eshold/iou@0.40: 0.0000, map/threshold/iou@0.45: 0.0000, map/threshold/iou@0.50: 0.0000, map/threshold/io
+u@0.55: 0.0000, map/threshold/iou@0.60: 0.0000, map/threshold/iou@0.65: 0.0000, map/unknown/iou@max: 0.86
+35, map/unknown/iou@0.35: 0.8611, map/unknown/iou@0.40: 0.8625, map/unknown/iou@0.45: 0.8632, map/unknown
+/iou@0.50: 0.8635, map/unknown/iou@0.55: 0.8614, map/unknown/iou@0.60: 0.8572, map/unknown/iou@0.65: 0.85
+12, map/mean/iou@max: 0.3784
+root@a9144439c186:/workspace# 
+
+```
