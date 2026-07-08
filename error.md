@@ -301,8 +301,22 @@ root@a9144439c186:/workspace#
 torchpack dist-run -np 1 python tools/visualize.py \
   configs/nuscenes/seg/robot-fusion-bev150-lss.yaml \
   --mode pred \
-  --checkpoint /workspace/runs/run-ef6361d7/latest.pth \
+  --checkpoint ./runs/run-ef6361d7/latest.pth \
   --split val \
   --out-dir results/robot-fusion-bev150-lss/viz \
   --map-score 0.5
+```
+
+7
+```
+root@a9144439c186:/workspace# torchpack dist-run -np 1 python tools/visualize.py   configs/nuscenes/seg/robot-fusion-bev150-lss.yaml   --mode pred   --checkpoint ./runs/run-2de6c3fa/latest.pth   --split val   -
+-out-dir results/robot-fusion-bev150-lss/viz   --map-score 0.5                                           
+2026-07-08 07:46:14,810 - mmdet - INFO - load checkpoint from local path: pretrained/swin_tiny_patch4_window7_224.pth
+load checkpoint from local path: ./runs/run-2de6c3fa/latest.pth
+The model and loaded state dict do not match exactly
+
+missing keys in source state_dict: encoders.camera.vtransform.dx, encoders.camera.vtransform.bx, encoders.camera.vtransform.nx, encoders.camera.vtransform.frustum
+
+100% 40/40 [00:05<00:00,  6.84it/s]
+root@a9144439c186:/workspace# 
 ```
