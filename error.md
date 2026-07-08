@@ -295,3 +295,14 @@ u@0.55: 0.0000, map/threshold/iou@0.60: 0.0000, map/threshold/iou@0.65: 0.0000, 
 root@a9144439c186:/workspace# 
 
 ```
+
+6
+```
+torchpack dist-run -np 1 python tools/visualize.py \
+  configs/nuscenes/seg/robot-fusion-bev150-lss.yaml \
+  --mode pred \
+  --checkpoint /workspace/runs/run-ef6361d7/latest.pth \
+  --split val \
+  --out-dir results/robot-fusion-bev150-lss/viz \
+  --map-score 0.5
+```
