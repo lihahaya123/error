@@ -408,3 +408,13 @@ the job to be terminated. The first process to do so was:
 root@a9144439c186:/workspace# 
 
 ```
+
+
+
+
+
+
+nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --format=csv
+nvidia-smi
+pgrep -af 'nvidia-cuda-mps|tools/train.py|torchpack|mpirun'
+nvidia-smi -q -d COMPUTE
