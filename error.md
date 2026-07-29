@@ -418,3 +418,195 @@ nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --form
 nvidia-smi
 pgrep -af 'nvidia-cuda-mps|tools/train.py|torchpack|mpirun'
 nvidia-smi -q -d COMPUTE
+
+
+(base) [lixiaoxiao19@localhost original_bs2_ep30]$ nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory --format=csv
+gpu_uuid, pid, process_name, used_gpu_memory [MiB]
+GPU-230e70f3-fcca-c799-d8c2-bb5185aee96c, 72210, /root/miniconda3/envs/openstereo/bin/python, 41502 MiB
+GPU-d49b39db-9a12-3085-d584-4a3f323241a5, 72211, /root/miniconda3/envs/openstereo/bin/python, 41510 MiB
+GPU-6241bc2f-4169-5fd4-d518-f0a05796c981, 72212, /root/miniconda3/envs/openstereo/bin/python, 41510 MiB
+GPU-b4d3afca-94cc-a3d4-2263-a89126463ab2, 72213, /root/miniconda3/envs/openstereo/bin/python, 41470 MiB
+GPU-900866b0-28a5-b692-08a3-fa5554befd5e, 76956, python, 18902 MiB
+GPU-717b4115-dc61-6cfb-fe77-0a25f4988f29, 82706, /root/miniconda3/envs/openstereo/bin/python, 2140 MiB
+GPU-ecca4f34-d4ac-7e00-5b68-246d89bc352b, 88098, ./build/bin/llama-server, 26076 MiB
+(base) [lixiaoxiao19@localhost original_bs2_ep30]$ nvidia-smi
+Wed Jul 29 15:44:41 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 545.23.08              Driver Version: 545.23.08    CUDA Version: 12.3     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA L40                     On  | 00000000:34:00.0 Off |                    0 |
+| N/A   63C    P0             244W / 300W |  41532MiB / 46068MiB |     99%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   1  NVIDIA L40                     On  | 00000000:35:00.0 Off |                    0 |
+| N/A   68C    P0             253W / 300W |  41540MiB / 46068MiB |     99%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   2  NVIDIA L40                     On  | 00000000:36:00.0 Off |                    0 |
+| N/A   69C    P0             253W / 300W |  41540MiB / 46068MiB |     79%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   3  NVIDIA L40                     On  | 00000000:37:00.0 Off |                    0 |
+| N/A   70C    P0             263W / 300W |  41500MiB / 46068MiB |     81%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   4  NVIDIA L40                     On  | 00000000:9B:00.0 Off |                    0 |
+| N/A   47C    P0             130W / 300W |  18914MiB / 46068MiB |     46%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   5  NVIDIA L40                     On  | 00000000:9C:00.0 Off |                    0 |
+| N/A   43C    P0              89W / 300W |   2160MiB / 46068MiB |    100%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   6  NVIDIA L40                     On  | 00000000:9D:00.0 Off |                    0 |
+| N/A   35C    P8              34W / 300W |     55MiB / 46068MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   7  NVIDIA L40                     On  | 00000000:9E:00.0 Off |                    0 |
+| N/A   35C    P0              75W / 300W |  26088MiB / 46068MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|    0   N/A  N/A     72210      C   ...niconda3/envs/openstereo/bin/python    41502MiB |
+|    1   N/A  N/A     72211      C   ...niconda3/envs/openstereo/bin/python    41510MiB |
+|    2   N/A  N/A     72212      C   ...niconda3/envs/openstereo/bin/python    41510MiB |
+|    3   N/A  N/A     72213      C   ...niconda3/envs/openstereo/bin/python    41470MiB |
+|    4   N/A  N/A     76956      C   python                                    18902MiB |
+|    5   N/A  N/A     82706      C   ...niconda3/envs/openstereo/bin/python     2140MiB |
+|    7   N/A  N/A     88098      C   ./build/bin/llama-server                  26076MiB |
++---------------------------------------------------------------------------------------+
+(base) [lixiaoxiao19@localhost original_bs2_ep30]$ pgrep -af 'nvidia-cuda-mps|tools/train.py|torchpack|mpirun'
+72205 /root/miniconda3/envs/openstereo/bin/python /root/miniconda3/envs/openstereo/bin/torchrun --nnodes=1 --nproc_per_node=4 --rdzv_backend=c10d --rdzv_endpoint=localhost:23456 tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+72210 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+72211 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+72212 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+72213 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+76950 /bin/sh -c mpirun --allow-run-as-root -np 1 -H localhost:1 -bind-to none -map-by slot -x CONDA_DIR -x CUDA_VERSION -x CUDA_VISIBLE_DEVICES -x DEBIAN_FRONTEND -x HOME -x HOSTNAME -x LC_CTYPE -x LD_LIBRARY_PATH -x LIBRARY_PATH -x MASTER_HOST -x NCCL_VERSION -x NVARCH -x NVIDIA_DRIVER_CAPABILITIES -x NVIDIA_PRODUCT_NAME -x NVIDIA_REQUIRE_CUDA -x NVIDIA_VISIBLE_DEVICES -x NV_CUDA_COMPAT_PACKAGE -x NV_CUDA_CUDART_DEV_VERSION -x NV_CUDA_CUDART_VERSION -x NV_CUDA_LIB_VERSION -x NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE -x NV_CUDA_NSIGHT_COMPUTE_VERSION -x NV_LIBCUBLAS_DEV_PACKAGE -x NV_LIBCUBLAS_DEV_PACKAGE_NAME -x NV_LIBCUBLAS_DEV_VERSION -x NV_LIBCUBLAS_PACKAGE -x NV_LIBCUBLAS_PACKAGE_NAME -x NV_LIBCUBLAS_VERSION -x NV_LIBCUSPARSE_DEV_VERSION -x NV_LIBCUSPARSE_VERSION -x NV_LIBNCCL_DEV_PACKAGE -x NV_LIBNCCL_DEV_PACKAGE_NAME -x NV_LIBNCCL_DEV_PACKAGE_VERSION -x NV_LIBNCCL_PACKAGE -x NV_LIBNCCL_PACKAGE_NAME -x NV_LIBNCCL_PACKAGE_VERSION -x NV_LIBNPP_DEV_PACKAGE -x NV_LIBNPP_DEV_VERSION -x NV_LIBNPP_PACKAGE -x NV_LIBNPP_VERSION -x NV_NVML_DEV_VERSION -x NV_NVPROF_DEV_PACKAGE -x NV_NVPROF_VERSION -x NV_NVTX_VERSION -x PATH -x PIP_DEFAULT_TIMEOUT -x PIP_INDEX_URL -x PIP_RETRIES -x PWD -x SHLVL -x TERM -x _ -mca pml ob1 -mca btl ^openib -mca btl_tcp_if_exclude docker0,lo /opt/conda/bin/python -m torchpack.launch.assets.silentrun python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30
+76951 mpirun --allow-run-as-root -np 1 -H localhost:1 -bind-to none -map-by slot -x CONDA_DIR -x CUDA_VERSION -x CUDA_VISIBLE_DEVICES -x DEBIAN_FRONTEND -x HOME -x HOSTNAME -x LC_CTYPE -x LD_LIBRARY_PATH -x LIBRARY_PATH -x MASTER_HOST -x NCCL_VERSION -x NVARCH -x NVIDIA_DRIVER_CAPABILITIES -x NVIDIA_PRODUCT_NAME -x NVIDIA_REQUIRE_CUDA -x NVIDIA_VISIBLE_DEVICES -x NV_CUDA_COMPAT_PACKAGE -x NV_CUDA_CUDART_DEV_VERSION -x NV_CUDA_CUDART_VERSION -x NV_CUDA_LIB_VERSION -x NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE -x NV_CUDA_NSIGHT_COMPUTE_VERSION -x NV_LIBCUBLAS_DEV_PACKAGE -x NV_LIBCUBLAS_DEV_PACKAGE_NAME -x NV_LIBCUBLAS_DEV_VERSION -x NV_LIBCUBLAS_PACKAGE -x NV_LIBCUBLAS_PACKAGE_NAME -x NV_LIBCUBLAS_VERSION -x NV_LIBCUSPARSE_DEV_VERSION -x NV_LIBCUSPARSE_VERSION -x NV_LIBNCCL_DEV_PACKAGE -x NV_LIBNCCL_DEV_PACKAGE_NAME -x NV_LIBNCCL_DEV_PACKAGE_VERSION -x NV_LIBNCCL_PACKAGE -x NV_LIBNCCL_PACKAGE_NAME -x NV_LIBNCCL_PACKAGE_VERSION -x NV_LIBNPP_DEV_PACKAGE -x NV_LIBNPP_DEV_VERSION -x NV_LIBNPP_PACKAGE -x NV_LIBNPP_VERSION -x NV_NVML_DEV_VERSION -x NV_NVPROF_DEV_PACKAGE -x NV_NVPROF_VERSION -x NV_NVTX_VERSION -x PATH -x PIP_DEFAULT_TIMEOUT -x PIP_INDEX_URL -x PIP_RETRIES -x PWD -x SHLVL -x TERM -x _ -mca pml ob1 -mca btl ^openib -mca btl_tcp_if_exclude docker0,lo /opt/conda/bin/python -m torchpack.launch.assets.silentrun python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30
+76955 /bin/sh -c python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30 2>&1
+76956 python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30
+82662 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82663 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82664 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82665 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82666 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82667 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82668 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82669 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82670 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82671 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82672 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82673 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82674 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82675 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82676 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82677 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82678 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82679 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82680 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82681 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82682 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82683 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82684 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82685 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82686 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82687 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82688 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82689 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82690 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82691 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82692 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82693 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82694 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82695 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82696 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82697 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82698 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82699 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82700 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82702 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82703 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82704 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82705 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82706 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82707 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82708 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82709 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82710 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82711 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82712 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82713 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82714 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82715 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82722 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82723 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82724 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82725 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82726 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82727 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82729 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82731 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82732 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82742 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+82748 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82784 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_multi.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_multipre_dispall_ep20
+82806 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+82870 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+82934 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83000 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83064 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83192 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83320 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83449 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83577 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83834 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+83964 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+84029 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+84157 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+84283 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+84413 /root/miniconda3/envs/openstereo/bin/python -u tools/train.py --dist_mode --cfg_file cfgs/aimon/1688/aimon_outground.yaml --extra_tag debug --pin_memory --save_root_dir ./output/v1_outground_mulbxbs
+96187 python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30
+96251 python tools/train.py configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml --run-dir /output/base/original_parameters_bs2_ep30 dataset_root=/data/ data.samples_per_gpu=2 data.workers_per_gpu=2 optimizer.lr=5e-5 max_epochs=30
+(base) [lixiaoxiao19@localhost original_bs2_ep30]$ nvidia-smi -q -d COMPUTE
+
+==============NVSMI LOG==============
+
+Timestamp                                 : Wed Jul 29 15:45:35 2026
+Driver Version                            : 545.23.08
+CUDA Version                              : 12.3
+
+Attached GPUs                             : 8
+GPU 00000000:34:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:35:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:36:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:37:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:9B:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:9C:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:9D:00.0
+    Compute Mode                          : Default
+
+GPU 00000000:9E:00.0
+    Compute Mode                          : Default
+
+(base) [lixiaoxiao19@localhost original_bs2_ep30]$ 
