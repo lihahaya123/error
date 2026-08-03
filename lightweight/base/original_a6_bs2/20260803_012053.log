@@ -1,0 +1,1405 @@
+2026-08-03 01:20:54,450 - mmdet3d - INFO - Config:
+seed = 0
+deterministic = False
+checkpoint_config = dict(interval=1, max_keep_ckpts=1)
+log_config = dict(
+    interval=50,
+    hooks=[dict(type='TextLoggerHook'),
+           dict(type='TensorboardLoggerHook')])
+load_from = 'checkpoint/bevfusion-seg.pth'
+resume_from = '/output/base/original_a6_bs2/latest.pth'
+cudnn_benchmark = False
+fp16 = dict(loss_scale=dict(growth_interval=2000))
+max_epochs = 70
+runner = dict(type='CustomEpochBasedRunner', max_epochs=70)
+dataset_type = 'RobotBEVDataset'
+dataset_root = '/data/'
+image_size = [256, 704]
+point_cloud_range = [0.0, -1.52, -0.5, 3.04, 1.52, 2.0]
+voxel_size = [0.005, 0.005, 0.1]
+gt_paste_stop_epoch = -1
+reduce_beams = None
+load_dim = 5
+use_dim = 5
+load_augmented = None
+object_classes = []
+map_classes = ['floor', 'carpet', 'wall', 'furniture', 'door', 'clutter']
+input_modality = dict(
+    use_lidar=True,
+    use_camera=True,
+    use_radar=False,
+    use_map=False,
+    use_external=False)
+augment2d = dict(
+    resize=[[1.1, 1.1], [1.1, 1.1]],
+    rotate=[0.0, 0.0],
+    gridmask=dict(prob=0.0, fixed_prob=True))
+augment3d = dict(scale=[1.0, 1.0], rotate=[0.0, 0.0], translate=0.0)
+model = dict(
+    type='BEVFusion',
+    encoders=dict(
+        camera=dict(
+            backbone=dict(
+                type='SwinTransformer',
+                embed_dims=96,
+                depths=[2, 2, 4, 2],
+                num_heads=[3, 6, 12, 24],
+                window_size=7,
+                mlp_ratio=4,
+                qkv_bias=True,
+                qk_scale=None,
+                drop_rate=0.0,
+                attn_drop_rate=0.0,
+                drop_path_rate=0.3,
+                patch_norm=True,
+                out_indices=[1, 2, 3],
+                with_cp=False,
+                convert_weights=True,
+                init_cfg=None),
+            neck=dict(
+                type='GeneralizedLSSFPN',
+                in_channels=[192, 384, 768],
+                out_channels=256,
+                start_level=0,
+                num_outs=3,
+                norm_cfg=dict(type='BN2d', requires_grad=True),
+                act_cfg=dict(type='ReLU', inplace=True),
+                upsample_cfg=dict(mode='bilinear', align_corners=False)),
+            vtransform=dict(
+                type='LSSTransform',
+                in_channels=256,
+                out_channels=80,
+                image_size=[256, 704],
+                feature_size=[32, 88],
+                xbound=[0.0, 3.04, 0.02],
+                ybound=[-1.52, 1.52, 0.02],
+                zbound=[-0.5, 2.0, 2.5],
+                dbound=[0.1, 5.0, 0.05],
+                downsample=2)),
+        lidar=dict(
+            voxelize=dict(
+                max_num_points=10,
+                point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0],
+                voxel_size=[0.005, 0.005, 0.1],
+                max_voxels=[60000, 90000]),
+            backbone=dict(
+                type='SparseEncoder',
+                in_channels=5,
+                sparse_shape=[608, 608, 25],
+                output_channels=128,
+                order=['conv', 'norm', 'act'],
+                encoder_channels=[[16, 16, 32], [32, 32, 64], [64, 64, 128],
+                                  [128, 128]],
+                encoder_paddings=[[0, 0, 1], [0, 0, 1], [0, 0, [1, 1, 0]],
+                                  [0, 0]],
+                block_type='basicblock'))),
+    fuser=dict(type='ConvFuser', in_channels=[80, 128], out_channels=256),
+    decoder=dict(
+        backbone=dict(
+            type='SECOND',
+            in_channels=256,
+            out_channels=[128, 256],
+            layer_nums=[5, 5],
+            layer_strides=[1, 2],
+            norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
+            conv_cfg=dict(type='Conv2d', bias=False)),
+        neck=dict(
+            type='SECONDFPN',
+            in_channels=[128, 256],
+            out_channels=[256, 256],
+            upsample_strides=[1, 2],
+            norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
+            upsample_cfg=dict(type='deconv', bias=False),
+            use_conv_for_no_stride=True)),
+    heads=dict(
+        object=None,
+        map=dict(
+            type='BEVSegmentationHead',
+            in_channels=512,
+            grid_transform=dict(
+                input_scope=[[0.0, 3.04, 0.04], [-1.52, 1.52, 0.04]],
+                output_scope=[[0.0, 3.0, 0.02], [-1.5, 1.5, 0.02]]),
+            classes=[
+                'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+            ],
+            loss='focal')))
+robot_train_pipeline = [
+    dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+    dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        reduce_beams=None,
+        load_augmented=None),
+    dict(
+        type='LoadPointsFromMultiSweeps',
+        sweeps_num=3,
+        load_dim=5,
+        use_dim=5,
+        reduce_beams=None,
+        pad_empty_sweeps=True,
+        remove_close=False,
+        load_augmented=None),
+    dict(
+        type='LoadAnnotations3D',
+        with_bbox_3d=True,
+        with_label_3d=True,
+        with_attr_label=False),
+    dict(
+        type='ImageAug3D',
+        final_dim=[256, 704],
+        resize_lim=[1.1, 1.1],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0.0, 0.0],
+        rand_flip=False,
+        is_train=True),
+    dict(
+        type='GlobalRotScaleTrans',
+        resize_lim=[1.0, 1.0],
+        rot_lim=[0.0, 0.0],
+        trans_lim=0.0,
+        is_train=True),
+    dict(
+        type='LoadRobotBEVSegmentation',
+        classes=['floor', 'carpet', 'wall', 'furniture', 'door', 'clutter']),
+    dict(
+        type='PointsRangeFilter',
+        point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+    dict(
+        type='ImageNormalize',
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]),
+    dict(
+        type='GridMask',
+        use_h=True,
+        use_w=True,
+        max_epoch=70,
+        rotate=1,
+        offset=False,
+        ratio=0.5,
+        mode=1,
+        prob=0.0,
+        fixed_prob=True),
+    dict(type='PointShuffle'),
+    dict(type='DefaultFormatBundle3D', classes=[]),
+    dict(
+        type='Collect3D',
+        keys=[
+            'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d', 'gt_masks_bev',
+            'gt_supervision_mask_bev'
+        ],
+        meta_keys=[
+            'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+            'camera2lidar', 'lidar2image', 'img_aug_matrix', 'lidar_aug_matrix'
+        ])
+]
+robot_test_pipeline = [
+    dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+    dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        reduce_beams=None,
+        load_augmented=None),
+    dict(
+        type='LoadPointsFromMultiSweeps',
+        sweeps_num=3,
+        load_dim=5,
+        use_dim=5,
+        reduce_beams=None,
+        pad_empty_sweeps=True,
+        remove_close=False,
+        test_mode=True,
+        load_augmented=None),
+    dict(
+        type='LoadAnnotations3D',
+        with_bbox_3d=True,
+        with_label_3d=True,
+        with_attr_label=False),
+    dict(
+        type='ImageAug3D',
+        final_dim=[256, 704],
+        resize_lim=[1.1, 1.1],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0.0, 0.0],
+        rand_flip=False,
+        is_train=False),
+    dict(
+        type='GlobalRotScaleTrans',
+        resize_lim=[1.0, 1.0],
+        rot_lim=[0.0, 0.0],
+        trans_lim=0.0,
+        is_train=False),
+    dict(
+        type='LoadRobotBEVSegmentation',
+        classes=['floor', 'carpet', 'wall', 'furniture', 'door', 'clutter']),
+    dict(
+        type='PointsRangeFilter',
+        point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+    dict(
+        type='ImageNormalize',
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]),
+    dict(type='DefaultFormatBundle3D', classes=[]),
+    dict(
+        type='Collect3D',
+        keys=[
+            'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d', 'gt_masks_bev',
+            'gt_supervision_mask_bev'
+        ],
+        meta_keys=[
+            'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+            'camera2lidar', 'lidar2image', 'img_aug_matrix', 'lidar_aug_matrix'
+        ])
+]
+data = dict(
+    samples_per_gpu=2,
+    workers_per_gpu=2,
+    train=dict(
+        type='RobotBEVDataset',
+        dataset_root='/data/',
+        ann_file='/data/bevfusion_infos_train.pkl',
+        pipeline=[
+            dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+            dict(
+                type='LoadPointsFromFile',
+                coord_type='LIDAR',
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                load_augmented=None),
+            dict(
+                type='LoadPointsFromMultiSweeps',
+                sweeps_num=3,
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                pad_empty_sweeps=True,
+                remove_close=False,
+                load_augmented=None),
+            dict(
+                type='LoadAnnotations3D',
+                with_bbox_3d=True,
+                with_label_3d=True,
+                with_attr_label=False),
+            dict(
+                type='ImageAug3D',
+                final_dim=[256, 704],
+                resize_lim=[1.1, 1.1],
+                bot_pct_lim=[0.0, 0.0],
+                rot_lim=[0.0, 0.0],
+                rand_flip=False,
+                is_train=True),
+            dict(
+                type='GlobalRotScaleTrans',
+                resize_lim=[1.0, 1.0],
+                rot_lim=[0.0, 0.0],
+                trans_lim=0.0,
+                is_train=True),
+            dict(
+                type='LoadRobotBEVSegmentation',
+                classes=[
+                    'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+                ]),
+            dict(
+                type='PointsRangeFilter',
+                point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+            dict(
+                type='ImageNormalize',
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+            dict(
+                type='GridMask',
+                use_h=True,
+                use_w=True,
+                max_epoch=70,
+                rotate=1,
+                offset=False,
+                ratio=0.5,
+                mode=1,
+                prob=0.0,
+                fixed_prob=True),
+            dict(type='PointShuffle'),
+            dict(type='DefaultFormatBundle3D', classes=[]),
+            dict(
+                type='Collect3D',
+                keys=[
+                    'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d',
+                    'gt_masks_bev', 'gt_supervision_mask_bev'
+                ],
+                meta_keys=[
+                    'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                    'lidar2camera', 'camera2lidar', 'lidar2image',
+                    'img_aug_matrix', 'lidar_aug_matrix'
+                ])
+        ],
+        object_classes=[],
+        map_classes=[
+            'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+        ],
+        modality=dict(
+            use_lidar=True,
+            use_camera=True,
+            use_radar=False,
+            use_map=False,
+            use_external=False),
+        test_mode=False,
+        filter_empty_gt=False,
+        box_type_3d='LiDAR'),
+    val=dict(
+        type='RobotBEVDataset',
+        dataset_root='/data/',
+        ann_file='/data/bevfusion_infos_val.pkl',
+        pipeline=[
+            dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+            dict(
+                type='LoadPointsFromFile',
+                coord_type='LIDAR',
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                load_augmented=None),
+            dict(
+                type='LoadPointsFromMultiSweeps',
+                sweeps_num=3,
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                pad_empty_sweeps=True,
+                remove_close=False,
+                test_mode=True,
+                load_augmented=None),
+            dict(
+                type='LoadAnnotations3D',
+                with_bbox_3d=True,
+                with_label_3d=True,
+                with_attr_label=False),
+            dict(
+                type='ImageAug3D',
+                final_dim=[256, 704],
+                resize_lim=[1.1, 1.1],
+                bot_pct_lim=[0.0, 0.0],
+                rot_lim=[0.0, 0.0],
+                rand_flip=False,
+                is_train=False),
+            dict(
+                type='GlobalRotScaleTrans',
+                resize_lim=[1.0, 1.0],
+                rot_lim=[0.0, 0.0],
+                trans_lim=0.0,
+                is_train=False),
+            dict(
+                type='LoadRobotBEVSegmentation',
+                classes=[
+                    'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+                ]),
+            dict(
+                type='PointsRangeFilter',
+                point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+            dict(
+                type='ImageNormalize',
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+            dict(type='DefaultFormatBundle3D', classes=[]),
+            dict(
+                type='Collect3D',
+                keys=[
+                    'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d',
+                    'gt_masks_bev', 'gt_supervision_mask_bev'
+                ],
+                meta_keys=[
+                    'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                    'lidar2camera', 'camera2lidar', 'lidar2image',
+                    'img_aug_matrix', 'lidar_aug_matrix'
+                ])
+        ],
+        object_classes=[],
+        map_classes=[
+            'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+        ],
+        modality=dict(
+            use_lidar=True,
+            use_camera=True,
+            use_radar=False,
+            use_map=False,
+            use_external=False),
+        test_mode=False,
+        filter_empty_gt=False,
+        box_type_3d='LiDAR'),
+    test=dict(
+        type='RobotBEVDataset',
+        dataset_root='/data/',
+        ann_file='/data/bevfusion_infos_test.pkl',
+        pipeline=[
+            dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+            dict(
+                type='LoadPointsFromFile',
+                coord_type='LIDAR',
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                load_augmented=None),
+            dict(
+                type='LoadPointsFromMultiSweeps',
+                sweeps_num=3,
+                load_dim=5,
+                use_dim=5,
+                reduce_beams=None,
+                pad_empty_sweeps=True,
+                remove_close=False,
+                test_mode=True,
+                load_augmented=None),
+            dict(
+                type='LoadAnnotations3D',
+                with_bbox_3d=True,
+                with_label_3d=True,
+                with_attr_label=False),
+            dict(
+                type='ImageAug3D',
+                final_dim=[256, 704],
+                resize_lim=[1.1, 1.1],
+                bot_pct_lim=[0.0, 0.0],
+                rot_lim=[0.0, 0.0],
+                rand_flip=False,
+                is_train=False),
+            dict(
+                type='GlobalRotScaleTrans',
+                resize_lim=[1.0, 1.0],
+                rot_lim=[0.0, 0.0],
+                trans_lim=0.0,
+                is_train=False),
+            dict(
+                type='LoadRobotBEVSegmentation',
+                classes=[
+                    'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+                ]),
+            dict(
+                type='PointsRangeFilter',
+                point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+            dict(
+                type='ImageNormalize',
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+            dict(type='DefaultFormatBundle3D', classes=[]),
+            dict(
+                type='Collect3D',
+                keys=[
+                    'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d',
+                    'gt_masks_bev', 'gt_supervision_mask_bev'
+                ],
+                meta_keys=[
+                    'camera_intrinsics', 'camera2ego', 'lidar2ego',
+                    'lidar2camera', 'camera2lidar', 'lidar2image',
+                    'img_aug_matrix', 'lidar_aug_matrix'
+                ])
+        ],
+        object_classes=[],
+        map_classes=[
+            'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+        ],
+        modality=dict(
+            use_lidar=True,
+            use_camera=True,
+            use_radar=False,
+            use_map=False,
+            use_external=False),
+        test_mode=True,
+        filter_empty_gt=False,
+        box_type_3d='LiDAR'))
+evaluation = dict(
+    interval=1,
+    save_best='robotbev_map_iou_max',
+    rule='greater',
+    pipeline=[
+        dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+        dict(
+            type='LoadPointsFromFile',
+            coord_type='LIDAR',
+            load_dim=5,
+            use_dim=5,
+            reduce_beams=None,
+            load_augmented=None),
+        dict(
+            type='LoadPointsFromMultiSweeps',
+            sweeps_num=3,
+            load_dim=5,
+            use_dim=5,
+            reduce_beams=None,
+            pad_empty_sweeps=True,
+            remove_close=False,
+            test_mode=True,
+            load_augmented=None),
+        dict(
+            type='LoadAnnotations3D',
+            with_bbox_3d=True,
+            with_label_3d=True,
+            with_attr_label=False),
+        dict(
+            type='ImageAug3D',
+            final_dim=[256, 704],
+            resize_lim=[1.1, 1.1],
+            bot_pct_lim=[0.0, 0.0],
+            rot_lim=[0.0, 0.0],
+            rand_flip=False,
+            is_train=False),
+        dict(
+            type='GlobalRotScaleTrans',
+            resize_lim=[1.0, 1.0],
+            rot_lim=[0.0, 0.0],
+            trans_lim=0.0,
+            is_train=False),
+        dict(
+            type='LoadRobotBEVSegmentation',
+            classes=[
+                'floor', 'carpet', 'wall', 'furniture', 'door', 'clutter'
+            ]),
+        dict(
+            type='PointsRangeFilter',
+            point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0]),
+        dict(
+            type='ImageNormalize',
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]),
+        dict(type='DefaultFormatBundle3D', classes=[]),
+        dict(
+            type='Collect3D',
+            keys=[
+                'img', 'points', 'gt_bboxes_3d', 'gt_labels_3d',
+                'gt_masks_bev', 'gt_supervision_mask_bev'
+            ],
+            meta_keys=[
+                'camera_intrinsics', 'camera2ego', 'lidar2ego', 'lidar2camera',
+                'camera2lidar', 'lidar2image', 'img_aug_matrix',
+                'lidar_aug_matrix'
+            ])
+    ])
+optimizer = dict(
+    type='AdamW',
+    lr=5e-05,
+    weight_decay=0.01,
+    paramwise_cfg=dict(
+        custom_keys=dict(
+            absolute_pos_embed=dict(decay_mult=0),
+            relative_position_bias_table=dict(decay_mult=0))))
+optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+lr_config = dict(policy='cyclic')
+momentum_config = dict(policy='cyclic')
+baseline_metrics = dict(
+    enabled=True,
+    train_output='baseline_train_metrics.jsonl',
+    inference_warmup_batches=5)
+early_stopping = dict(
+    enabled=True,
+    monitor='robotbev_map_iou_max',
+    rule='greater',
+    patience=6,
+    min_delta=0.0001,
+    start_epoch=20,
+    state_file='early_stopping_state.json')
+load_from_ignore_shape_mismatch = True
+load_from_skip_prefixes = ['heads.map.classifier.6']
+run_dir = '/output/base/original_a6_bs2'
+
+2026-08-03 01:20:54,452 - mmdet3d - INFO - Set random seed to 0, deterministic mode: False
+2026-08-03 01:20:56,260 - mmdet3d - INFO - Model:
+BEVFusion(
+  (encoders): ModuleDict(
+    (camera): ModuleDict(
+      (backbone): SwinTransformer(
+        (patch_embed): PatchEmbed(
+          (adap_padding): AdaptivePadding()
+          (projection): Conv2d(3, 96, kernel_size=(4, 4), stride=(4, 4))
+          (norm): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+        )
+        (drop_after_pos): Dropout(p=0.0, inplace=False)
+        (stages): ModuleList(
+          (0): SwinBlockSequence(
+            (blocks): ModuleList(
+              (0): SwinBlock(
+                (norm1): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=96, out_features=288, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=96, out_features=96, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=96, out_features=384, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=384, out_features=96, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (1): SwinBlock(
+                (norm1): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=96, out_features=288, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=96, out_features=96, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((96,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=96, out_features=384, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=384, out_features=96, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+            )
+            (downsample): PatchMerging(
+              (adap_padding): AdaptivePadding()
+              (sampler): Unfold(kernel_size=(2, 2), dilation=(1, 1), padding=(0, 0), stride=(2, 2))
+              (norm): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+              (reduction): Linear(in_features=384, out_features=192, bias=False)
+            )
+          )
+          (1): SwinBlockSequence(
+            (blocks): ModuleList(
+              (0): SwinBlock(
+                (norm1): LayerNorm((192,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=192, out_features=576, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=192, out_features=192, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((192,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=192, out_features=768, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=768, out_features=192, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (1): SwinBlock(
+                (norm1): LayerNorm((192,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=192, out_features=576, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=192, out_features=192, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((192,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=192, out_features=768, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=768, out_features=192, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+            )
+            (downsample): PatchMerging(
+              (adap_padding): AdaptivePadding()
+              (sampler): Unfold(kernel_size=(2, 2), dilation=(1, 1), padding=(0, 0), stride=(2, 2))
+              (norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (reduction): Linear(in_features=768, out_features=384, bias=False)
+            )
+          )
+          (2): SwinBlockSequence(
+            (blocks): ModuleList(
+              (0): SwinBlock(
+                (norm1): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=384, out_features=1152, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=384, out_features=384, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=384, out_features=1536, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=1536, out_features=384, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (1): SwinBlock(
+                (norm1): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=384, out_features=1152, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=384, out_features=384, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=384, out_features=1536, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=1536, out_features=384, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (2): SwinBlock(
+                (norm1): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=384, out_features=1152, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=384, out_features=384, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=384, out_features=1536, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=1536, out_features=384, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (3): SwinBlock(
+                (norm1): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=384, out_features=1152, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=384, out_features=384, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=384, out_features=1536, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=1536, out_features=384, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+            )
+            (downsample): PatchMerging(
+              (adap_padding): AdaptivePadding()
+              (sampler): Unfold(kernel_size=(2, 2), dilation=(1, 1), padding=(0, 0), stride=(2, 2))
+              (norm): LayerNorm((1536,), eps=1e-05, elementwise_affine=True)
+              (reduction): Linear(in_features=1536, out_features=768, bias=False)
+            )
+          )
+          (3): SwinBlockSequence(
+            (blocks): ModuleList(
+              (0): SwinBlock(
+                (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=768, out_features=2304, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=768, out_features=768, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=768, out_features=3072, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=3072, out_features=768, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+              (1): SwinBlock(
+                (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (attn): ShiftWindowMSA(
+                  (w_msa): WindowMSA(
+                    (qkv): Linear(in_features=768, out_features=2304, bias=True)
+                    (attn_drop): Dropout(p=0.0, inplace=False)
+                    (proj): Linear(in_features=768, out_features=768, bias=True)
+                    (proj_drop): Dropout(p=0.0, inplace=False)
+                    (softmax): Softmax(dim=-1)
+                  )
+                  (drop): DropPath()
+                )
+                (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (ffn): FFN(
+                  (activate): GELU()
+                  (layers): Sequential(
+                    (0): Sequential(
+                      (0): Linear(in_features=768, out_features=3072, bias=True)
+                      (1): GELU()
+                      (2): Dropout(p=0.0, inplace=False)
+                    )
+                    (1): Linear(in_features=3072, out_features=768, bias=True)
+                    (2): Dropout(p=0.0, inplace=False)
+                  )
+                  (dropout_layer): DropPath()
+                )
+              )
+            )
+          )
+        )
+        (norm1): LayerNorm((192,), eps=1e-05, elementwise_affine=True)
+        (norm2): LayerNorm((384,), eps=1e-05, elementwise_affine=True)
+        (norm3): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+      )
+      (neck): GeneralizedLSSFPN(
+        (lateral_convs): ModuleList(
+          (0): ConvModule(
+            (conv): Conv2d(448, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (activate): ReLU(inplace=True)
+          )
+          (1): ConvModule(
+            (conv): Conv2d(1152, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (activate): ReLU(inplace=True)
+          )
+        )
+        (fpn_convs): ModuleList(
+          (0): ConvModule(
+            (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (activate): ReLU(inplace=True)
+          )
+          (1): ConvModule(
+            (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (activate): ReLU(inplace=True)
+          )
+        )
+      )
+      (vtransform): LSSTransform(
+        (depthnet): Conv2d(256, 178, kernel_size=(1, 1), stride=(1, 1))
+        (downsample): Sequential(
+          (0): Conv2d(80, 80, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(80, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+          (3): Conv2d(80, 80, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (4): BatchNorm2d(80, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (5): ReLU(inplace=True)
+          (6): Conv2d(80, 80, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (7): BatchNorm2d(80, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (8): ReLU(inplace=True)
+        )
+      )
+    )
+    (lidar): ModuleDict(
+      (voxelize): Voxelization(voxel_size=[0.005, 0.005, 0.1], point_cloud_range=[0.0, -1.52, -0.5, 3.04, 1.52, 2.0], max_num_points=10, max_voxels=(60000, 90000), deterministic=True)
+      (backbone): SparseEncoder(
+        (conv_input): SparseSequential(
+          (0): SubMConv3d()
+          (1): BatchNorm1d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+        (encoder_layers): SparseSequential(
+          (encoder_layer1): SparseSequential(
+            (0): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(16, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): SparseSequential(
+              (0): SparseConv3d()
+              (1): BatchNorm1d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (2): ReLU(inplace=True)
+            )
+          )
+          (encoder_layer2): SparseSequential(
+            (0): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(32, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): SparseSequential(
+              (0): SparseConv3d()
+              (1): BatchNorm1d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (2): ReLU(inplace=True)
+            )
+          )
+          (encoder_layer3): SparseSequential(
+            (0): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(64, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (2): SparseSequential(
+              (0): SparseConv3d()
+              (1): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (2): ReLU(inplace=True)
+            )
+          )
+          (encoder_layer4): SparseSequential(
+            (0): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+            (1): SparseBasicBlock(
+              (conv1): SubMConv3d()
+              (bn1): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (conv2): SubMConv3d()
+              (bn2): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+              (relu): ReLU(inplace=True)
+            )
+          )
+        )
+        (conv_out): SparseSequential(
+          (0): SparseConv3d()
+          (1): BatchNorm1d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+      )
+    )
+  )
+  (fuser): ConvFuser(
+    (0): Conv2d(208, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+  )
+  (decoder): ModuleDict(
+    (backbone): SECOND(
+      (blocks): ModuleList(
+        (0): Sequential(
+          (0): Conv2d(256, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+          (3): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (4): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (5): ReLU(inplace=True)
+          (6): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (7): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (8): ReLU(inplace=True)
+          (9): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (10): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (11): ReLU(inplace=True)
+          (12): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (13): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (14): ReLU(inplace=True)
+          (15): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (16): BatchNorm2d(128, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (17): ReLU(inplace=True)
+        )
+        (1): Sequential(
+          (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+          (1): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+          (3): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (4): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (5): ReLU(inplace=True)
+          (6): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (7): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (8): ReLU(inplace=True)
+          (9): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (10): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (11): ReLU(inplace=True)
+          (12): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (13): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (14): ReLU(inplace=True)
+          (15): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (16): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (17): ReLU(inplace=True)
+        )
+      )
+    )
+    init_cfg={'type': 'Kaiming', 'layer': 'Conv2d'}
+    (neck): SECONDFPN(
+      (deblocks): ModuleList(
+        (0): Sequential(
+          (0): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (1): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+        (1): Sequential(
+          (0): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2), bias=False)
+          (1): BatchNorm2d(256, eps=0.001, momentum=0.01, affine=True, track_running_stats=True)
+          (2): ReLU(inplace=True)
+        )
+      )
+    )
+    init_cfg=[{'type': 'Kaiming', 'layer': 'ConvTranspose2d'}, {'type': 'Constant', 'layer': 'NaiveSyncBatchNorm2d', 'val': 1.0}]
+  )
+  (heads): ModuleDict(
+    (map): BEVSegmentationHead(
+      (transform): BEVGridTransform()
+      (classifier): Sequential(
+        (0): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (2): ReLU(inplace=True)
+        (3): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (4): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (5): ReLU(inplace=True)
+        (6): Conv2d(512, 6, kernel_size=(1, 1), stride=(1, 1))
+      )
+    )
+  )
+)
+2026-08-03 01:21:01,527 - mmdet3d - INFO - load checkpoint from local path: /output/base/original_a6_bs2/latest.pth
+2026-08-03 01:21:01,824 - mmdet3d - WARNING - The model and loaded state dict do not match exactly
+
+missing keys in source state_dict: encoders.camera.vtransform.dx, encoders.camera.vtransform.bx, encoders.camera.vtransform.nx, encoders.camera.vtransform.frustum
+
+2026-08-03 01:21:01,854 - mmdet3d - INFO - resumed epoch 50, iter 210000
+2026-08-03 01:21:01,856 - mmdet3d - INFO - Start running, host: , work_dir: /output/base/original_a6_bs2
+2026-08-03 01:21:01,856 - mmdet3d - INFO - Hooks will be executed in the following order:
+before_run:
+(VERY_HIGH   ) CyclicLrUpdaterHook                
+(HIGH        ) CyclicMomentumUpdaterHook          
+(ABOVE_NORMAL) Fp16OptimizerHook                  
+(NORMAL      ) CheckpointHook                     
+(NORMAL      ) DistEvalHook                       
+(75          ) EarlyStoppingHook                  
+(80          ) BaselineMetricsHook                
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_train_epoch:
+(VERY_HIGH   ) CyclicLrUpdaterHook                
+(HIGH        ) CyclicMomentumUpdaterHook          
+(NORMAL      ) DistSamplerSeedHook                
+(NORMAL      ) DistEvalHook                       
+(LOW         ) IterTimerHook                      
+(80          ) BaselineMetricsHook                
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_train_iter:
+(VERY_HIGH   ) CyclicLrUpdaterHook                
+(HIGH        ) CyclicMomentumUpdaterHook          
+(NORMAL      ) DistEvalHook                       
+(LOW         ) IterTimerHook                      
+(80          ) BaselineMetricsHook                
+ -------------------- 
+after_train_iter:
+(ABOVE_NORMAL) Fp16OptimizerHook                  
+(NORMAL      ) CheckpointHook                     
+(NORMAL      ) DistEvalHook                       
+(LOW         ) IterTimerHook                      
+(80          ) BaselineMetricsHook                
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+after_train_epoch:
+(NORMAL      ) CheckpointHook                     
+(NORMAL      ) DistEvalHook                       
+(75          ) EarlyStoppingHook                  
+(80          ) BaselineMetricsHook                
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_val_epoch:
+(NORMAL      ) DistSamplerSeedHook                
+(LOW         ) IterTimerHook                      
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+before_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_iter:
+(LOW         ) IterTimerHook                      
+ -------------------- 
+after_val_epoch:
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+after_run:
+(80          ) BaselineMetricsHook                
+(VERY_LOW    ) TextLoggerHook                     
+(VERY_LOW    ) TensorboardLoggerHook              
+ -------------------- 
+2026-08-03 01:21:01,856 - mmdet3d - INFO - workflow: [('train', 1)], max: 70 epochs
+2026-08-03 01:21:01,858 - mmdet3d - INFO - Checkpoints will be saved to /output/base/original_a6_bs2 by HardDiskBackend.
+2026-08-03 01:21:01,858 - mmdet3d - INFO - Restored early stopping state: best 0.557285 at epoch 46, bad epochs 4
+2026-08-03 01:21:01,859 - mmdet3d - INFO - Early stopping monitors robotbev_map_iou_max (greater), patience=6, min_delta=0.0001
+2026-08-03 01:21:01,882 - mmdet3d - INFO - Training baseline metrics will be written to /output/base/original_a6_bs2/baseline_train_metrics.jsonl
+2026-08-03 01:21:13,669 - mmdet3d - INFO - Epoch [51][50/4200]	lr: 2.311e-04, eta: 5:28:36, time: 0.235, data_time: 0.054, memory: 2658, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 17217.4200, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 17217.4200, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17217.4200, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 17217.4200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17217.4200, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17217.4200, loss: 0.0081, grad_norm: 0.0171
+2026-08-03 01:21:22,875 - mmdet3d - INFO - Epoch [51][100/4200]	lr: 2.309e-04, eta: 4:52:56, time: 0.184, data_time: 0.006, memory: 2658, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 16633.5800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16633.5800, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16633.5800, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 16633.5800, loss/map/door/focal: 0.0000, stats/map/door/valid_pixels: 16633.5800, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16633.5800, loss: 0.0080, grad_norm: inf
+2026-08-03 01:21:32,190 - mmdet3d - INFO - Epoch [51][150/4200]	lr: 2.307e-04, eta: 4:41:57, time: 0.186, data_time: 0.006, memory: 2658, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16646.7800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16646.7800, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16646.7800, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 16646.7800, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16646.7800, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16646.7800, loss: 0.0083, grad_norm: 0.0222
+2026-08-03 01:21:41,293 - mmdet3d - INFO - Epoch [51][200/4200]	lr: 2.304e-04, eta: 4:34:54, time: 0.182, data_time: 0.005, memory: 2667, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 16695.4200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16695.4200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16695.4200, loss/map/furniture/focal: 0.0040, stats/map/furniture/valid_pixels: 16695.4200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16695.4200, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16695.4200, loss: 0.0113, grad_norm: 0.0380
+2026-08-03 01:21:50,473 - mmdet3d - INFO - Epoch [51][250/4200]	lr: 2.302e-04, eta: 4:31:02, time: 0.184, data_time: 0.005, memory: 2667, loss/map/floor/focal: 0.0030, stats/map/floor/valid_pixels: 17406.6800, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17406.6800, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 17406.6800, loss/map/furniture/focal: 0.0032, stats/map/furniture/valid_pixels: 17406.6800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17406.6800, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 17406.6800, loss: 0.0108, grad_norm: 0.0243
+2026-08-03 01:21:59,840 - mmdet3d - INFO - Epoch [51][300/4200]	lr: 2.300e-04, eta: 4:29:17, time: 0.187, data_time: 0.006, memory: 2667, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 15503.9000, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15503.9000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15503.9000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15503.9000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15503.9000, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15503.9000, loss: 0.0092, grad_norm: 0.0247
+2026-08-03 01:22:09,143 - mmdet3d - INFO - Epoch [51][350/4200]	lr: 2.298e-04, eta: 4:27:44, time: 0.186, data_time: 0.006, memory: 2667, loss/map/floor/focal: 0.0100, stats/map/floor/valid_pixels: 16462.8200, loss/map/carpet/focal: 0.0066, stats/map/carpet/valid_pixels: 16462.8200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16462.8200, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 16462.8200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16462.8200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16462.8200, loss: 0.0220, grad_norm: inf
+2026-08-03 01:22:18,198 - mmdet3d - INFO - Epoch [51][400/4200]	lr: 2.295e-04, eta: 4:25:40, time: 0.181, data_time: 0.005, memory: 2683, loss/map/floor/focal: 0.0050, stats/map/floor/valid_pixels: 17284.3000, loss/map/carpet/focal: 0.0025, stats/map/carpet/valid_pixels: 17284.3000, loss/map/wall/focal: 0.0010, stats/map/wall/valid_pixels: 17284.3000, loss/map/furniture/focal: 0.0035, stats/map/furniture/valid_pixels: 17284.3000, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 17284.3000, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 17284.3000, loss: 0.0149, grad_norm: 0.0387
+2026-08-03 01:22:27,594 - mmdet3d - INFO - Epoch [51][450/4200]	lr: 2.293e-04, eta: 4:25:05, time: 0.188, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0035, stats/map/floor/valid_pixels: 15251.6800, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 15251.6800, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 15251.6800, loss/map/furniture/focal: 0.0034, stats/map/furniture/valid_pixels: 15251.6800, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15251.6800, loss/map/clutter/focal: 0.0032, stats/map/clutter/valid_pixels: 15251.6800, loss: 0.0126, grad_norm: 0.0302
+2026-08-03 01:22:36,909 - mmdet3d - INFO - Epoch [51][500/4200]	lr: 2.291e-04, eta: 4:24:21, time: 0.186, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 16119.2000, loss/map/carpet/focal: 0.0018, stats/map/carpet/valid_pixels: 16119.2000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16119.2000, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16119.2000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16119.2000, loss/map/clutter/focal: 0.0030, stats/map/clutter/valid_pixels: 16119.2000, loss: 0.0115, grad_norm: 0.0313
+2026-08-03 01:22:46,225 - mmdet3d - INFO - Epoch [51][550/4200]	lr: 2.289e-04, eta: 4:23:44, time: 0.186, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0040, stats/map/floor/valid_pixels: 15426.1800, loss/map/carpet/focal: 0.0016, stats/map/carpet/valid_pixels: 15426.1800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15426.1800, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 15426.1800, loss/map/door/focal: 0.0003, stats/map/door/valid_pixels: 15426.1800, loss/map/clutter/focal: 0.0031, stats/map/clutter/valid_pixels: 15426.1800, loss: 0.0129, grad_norm: 0.0597
+2026-08-03 01:22:55,563 - mmdet3d - INFO - Epoch [51][600/4200]	lr: 2.287e-04, eta: 4:23:15, time: 0.187, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0057, stats/map/floor/valid_pixels: 15798.7800, loss/map/carpet/focal: 0.0026, stats/map/carpet/valid_pixels: 15798.7800, loss/map/wall/focal: 0.0012, stats/map/wall/valid_pixels: 15798.7800, loss/map/furniture/focal: 0.0041, stats/map/furniture/valid_pixels: 15798.7800, loss/map/door/focal: 0.0004, stats/map/door/valid_pixels: 15798.7800, loss/map/clutter/focal: 0.0066, stats/map/clutter/valid_pixels: 15798.7800, loss: 0.0206, grad_norm: 0.0859
+2026-08-03 01:23:04,814 - mmdet3d - INFO - Epoch [51][650/4200]	lr: 2.284e-04, eta: 4:22:37, time: 0.185, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0036, stats/map/floor/valid_pixels: 16839.7000, loss/map/carpet/focal: 0.0016, stats/map/carpet/valid_pixels: 16839.7000, loss/map/wall/focal: 0.0011, stats/map/wall/valid_pixels: 16839.7000, loss/map/furniture/focal: 0.0033, stats/map/furniture/valid_pixels: 16839.7000, loss/map/door/focal: 0.0003, stats/map/door/valid_pixels: 16839.7000, loss/map/clutter/focal: 0.0041, stats/map/clutter/valid_pixels: 16839.7000, loss: 0.0140, grad_norm: 0.0496
+2026-08-03 01:23:14,156 - mmdet3d - INFO - Epoch [51][700/4200]	lr: 2.282e-04, eta: 4:22:14, time: 0.187, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0038, stats/map/floor/valid_pixels: 15583.9000, loss/map/carpet/focal: 0.0016, stats/map/carpet/valid_pixels: 15583.9000, loss/map/wall/focal: 0.0012, stats/map/wall/valid_pixels: 15583.9000, loss/map/furniture/focal: 0.0032, stats/map/furniture/valid_pixels: 15583.9000, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15583.9000, loss/map/clutter/focal: 0.0040, stats/map/clutter/valid_pixels: 15583.9000, loss: 0.0140, grad_norm: 0.0374
+2026-08-03 01:23:23,543 - mmdet3d - INFO - Epoch [51][750/4200]	lr: 2.280e-04, eta: 4:21:59, time: 0.188, data_time: 0.007, memory: 2699, loss/map/floor/focal: 0.0032, stats/map/floor/valid_pixels: 16550.0000, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16550.0000, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16550.0000, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 16550.0000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16550.0000, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 16550.0000, loss: 0.0113, grad_norm: 0.0253
+2026-08-03 01:23:32,907 - mmdet3d - INFO - Epoch [51][800/4200]	lr: 2.278e-04, eta: 4:21:41, time: 0.187, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0030, stats/map/floor/valid_pixels: 16125.1600, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16125.1600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16125.1600, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16125.1600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16125.1600, loss/map/clutter/focal: 0.0029, stats/map/clutter/valid_pixels: 16125.1600, loss: 0.0106, grad_norm: 0.0225
+2026-08-03 01:23:42,348 - mmdet3d - INFO - Epoch [51][850/4200]	lr: 2.276e-04, eta: 4:21:32, time: 0.189, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 15258.7200, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15258.7200, loss/map/wall/focal: 0.0011, stats/map/wall/valid_pixels: 15258.7200, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 15258.7200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15258.7200, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 15258.7200, loss: 0.0109, grad_norm: 0.0227
+2026-08-03 01:23:51,797 - mmdet3d - INFO - Epoch [51][900/4200]	lr: 2.273e-04, eta: 4:21:24, time: 0.189, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15832.3400, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 15832.3400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15832.3400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 15832.3400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15832.3400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 15832.3400, loss: 0.0100, grad_norm: 0.0211
+2026-08-03 01:24:00,988 - mmdet3d - INFO - Epoch [51][950/4200]	lr: 2.271e-04, eta: 4:20:53, time: 0.184, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 16327.6400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16327.6400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16327.6400, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16327.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16327.6400, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16327.6400, loss: 0.0101, grad_norm: 0.0205
+2026-08-03 01:24:10,350 - mmdet3d - INFO - Epoch [51][1000/4200]	lr: 2.269e-04, eta: 4:20:38, time: 0.187, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0032, stats/map/floor/valid_pixels: 16652.4600, loss/map/carpet/focal: 0.0015, stats/map/carpet/valid_pixels: 16652.4600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16652.4600, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 16652.4600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16652.4600, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 16652.4600, loss: 0.0112, grad_norm: 0.0290
+2026-08-03 01:24:19,661 - mmdet3d - INFO - Epoch [51][1050/4200]	lr: 2.267e-04, eta: 4:20:20, time: 0.186, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0033, stats/map/floor/valid_pixels: 15675.4800, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15675.4800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15675.4800, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 15675.4800, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15675.4800, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 15675.4800, loss: 0.0112, grad_norm: 0.0335
+2026-08-03 01:24:29,007 - mmdet3d - INFO - Epoch [51][1100/4200]	lr: 2.264e-04, eta: 4:20:06, time: 0.187, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16282.3600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16282.3600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16282.3600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16282.3600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16282.3600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16282.3600, loss: 0.0092, grad_norm: 0.0202
+2026-08-03 01:24:38,328 - mmdet3d - INFO - Epoch [51][1150/4200]	lr: 2.262e-04, eta: 4:19:49, time: 0.186, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15492.2400, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15492.2400, loss/map/wall/focal: 0.0010, stats/map/wall/valid_pixels: 15492.2400, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 15492.2400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15492.2400, loss/map/clutter/focal: 0.0030, stats/map/clutter/valid_pixels: 15492.2400, loss: 0.0110, grad_norm: 0.0262
+2026-08-03 01:24:47,581 - mmdet3d - INFO - Epoch [51][1200/4200]	lr: 2.260e-04, eta: 4:19:29, time: 0.185, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 18165.1000, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 18165.1000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 18165.1000, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 18165.1000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 18165.1000, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 18165.1000, loss: 0.0094, grad_norm: 0.0184
+2026-08-03 01:24:56,978 - mmdet3d - INFO - Epoch [51][1250/4200]	lr: 2.258e-04, eta: 4:19:20, time: 0.188, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17553.3600, loss/map/carpet/focal: 0.0016, stats/map/carpet/valid_pixels: 17553.3600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17553.3600, loss/map/furniture/focal: 0.0030, stats/map/furniture/valid_pixels: 17553.3600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17553.3600, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 17553.3600, loss: 0.0103, grad_norm: 0.0192
+2026-08-03 01:25:06,235 - mmdet3d - INFO - Epoch [51][1300/4200]	lr: 2.256e-04, eta: 4:19:01, time: 0.185, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16771.6000, loss/map/carpet/focal: 0.0007, stats/map/carpet/valid_pixels: 16771.6000, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16771.6000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16771.6000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16771.6000, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16771.6000, loss: 0.0092, grad_norm: 0.0220
+2026-08-03 01:25:15,471 - mmdet3d - INFO - Epoch [51][1350/4200]	lr: 2.253e-04, eta: 4:18:42, time: 0.185, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 17545.1600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17545.1600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17545.1600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17545.1600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17545.1600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 17545.1600, loss: 0.0093, grad_norm: 0.0178
+2026-08-03 01:25:24,927 - mmdet3d - INFO - Epoch [51][1400/4200]	lr: 2.251e-04, eta: 4:18:36, time: 0.189, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 15457.4000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15457.4000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15457.4000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15457.4000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15457.4000, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 15457.4000, loss: 0.0087, grad_norm: 0.0185
+2026-08-03 01:25:34,319 - mmdet3d - INFO - Epoch [51][1450/4200]	lr: 2.249e-04, eta: 4:18:27, time: 0.188, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 17057.3800, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 17057.3800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17057.3800, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17057.3800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17057.3800, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 17057.3800, loss: 0.0098, grad_norm: 0.0196
+2026-08-03 01:25:43,662 - mmdet3d - INFO - Epoch [51][1500/4200]	lr: 2.247e-04, eta: 4:18:15, time: 0.187, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16895.1600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16895.1600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16895.1600, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 16895.1600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16895.1600, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16895.1600, loss: 0.0084, grad_norm: 0.0174
+2026-08-03 01:25:53,075 - mmdet3d - INFO - Epoch [51][1550/4200]	lr: 2.245e-04, eta: 4:18:06, time: 0.188, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 17148.5400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17148.5400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17148.5400, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 17148.5400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17148.5400, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 17148.5400, loss: 0.0094, grad_norm: 0.0192
+2026-08-03 01:26:02,438 - mmdet3d - INFO - Epoch [51][1600/4200]	lr: 2.242e-04, eta: 4:17:55, time: 0.187, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 16577.2200, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16577.2200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16577.2200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16577.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16577.2200, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16577.2200, loss: 0.0091, grad_norm: 0.0197
+2026-08-03 01:26:11,803 - mmdet3d - INFO - Epoch [51][1650/4200]	lr: 2.240e-04, eta: 4:17:45, time: 0.187, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16334.0600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16334.0600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16334.0600, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 16334.0600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16334.0600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16334.0600, loss: 0.0091, grad_norm: 0.0178
+2026-08-03 01:26:21,183 - mmdet3d - INFO - Epoch [51][1700/4200]	lr: 2.238e-04, eta: 4:17:35, time: 0.188, data_time: 0.005, memory: 2699, loss/map/floor/focal: 0.0048, stats/map/floor/valid_pixels: 14029.8000, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 14029.8000, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 14029.8000, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 14029.8000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 14029.8000, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 14029.8000, loss: 0.0119, grad_norm: 0.0346
+2026-08-03 01:26:30,568 - mmdet3d - INFO - Epoch [51][1750/4200]	lr: 2.236e-04, eta: 4:17:25, time: 0.188, data_time: 0.006, memory: 2699, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 15688.7600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 15688.7600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15688.7600, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 15688.7600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15688.7600, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 15688.7600, loss: 0.0094, grad_norm: 0.0216
+2026-08-03 01:26:39,906 - mmdet3d - INFO - Epoch [51][1800/4200]	lr: 2.233e-04, eta: 4:17:14, time: 0.187, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 14862.6200, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 14862.6200, loss/map/wall/focal: 0.0010, stats/map/wall/valid_pixels: 14862.6200, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 14862.6200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 14862.6200, loss/map/clutter/focal: 0.0029, stats/map/clutter/valid_pixels: 14862.6200, loss: 0.0107, grad_norm: 0.0218
+2026-08-03 01:26:49,290 - mmdet3d - INFO - Epoch [51][1850/4200]	lr: 2.231e-04, eta: 4:17:04, time: 0.188, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15815.3600, loss/map/carpet/focal: 0.0007, stats/map/carpet/valid_pixels: 15815.3600, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 15815.3600, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 15815.3600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15815.3600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 15815.3600, loss: 0.0091, grad_norm: 0.0209
+2026-08-03 01:26:58,526 - mmdet3d - INFO - Epoch [51][1900/4200]	lr: 2.229e-04, eta: 4:16:48, time: 0.185, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0029, stats/map/floor/valid_pixels: 17484.3200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 17484.3200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17484.3200, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 17484.3200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17484.3200, loss/map/clutter/focal: 0.0018, stats/map/clutter/valid_pixels: 17484.3200, loss: 0.0086, grad_norm: 0.0195
+2026-08-03 01:27:07,801 - mmdet3d - INFO - Epoch [51][1950/4200]	lr: 2.227e-04, eta: 4:16:34, time: 0.185, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16320.3800, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16320.3800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16320.3800, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16320.3800, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16320.3800, loss/map/clutter/focal: 0.0018, stats/map/clutter/valid_pixels: 16320.3800, loss: 0.0089, grad_norm: 0.0230
+2026-08-03 01:27:17,073 - mmdet3d - INFO - Epoch [51][2000/4200]	lr: 2.225e-04, eta: 4:16:20, time: 0.185, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15688.6400, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15688.6400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15688.6400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 15688.6400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15688.6400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 15688.6400, loss: 0.0097, grad_norm: 0.0214
+2026-08-03 01:27:26,416 - mmdet3d - INFO - Epoch [51][2050/4200]	lr: 2.222e-04, eta: 4:16:09, time: 0.187, data_time: 0.006, memory: 2700, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16823.9200, loss/map/carpet/focal: 0.0017, stats/map/carpet/valid_pixels: 16823.9200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16823.9200, loss/map/furniture/focal: 0.0032, stats/map/furniture/valid_pixels: 16823.9200, loss/map/door/focal: 0.0000, stats/map/door/valid_pixels: 16823.9200, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16823.9200, loss: 0.0104, grad_norm: 0.0276
+2026-08-03 01:27:35,760 - mmdet3d - INFO - Epoch [51][2100/4200]	lr: 2.220e-04, eta: 4:15:59, time: 0.187, data_time: 0.006, memory: 2700, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 16865.2600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16865.2600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16865.2600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16865.2600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16865.2600, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16865.2600, loss: 0.0091, grad_norm: 0.0193
+2026-08-03 01:27:45,148 - mmdet3d - INFO - Epoch [51][2150/4200]	lr: 2.218e-04, eta: 4:15:50, time: 0.188, data_time: 0.005, memory: 2700, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 14998.7600, loss/map/carpet/focal: 0.0015, stats/map/carpet/valid_pixels: 14998.7600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 14998.7600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 14998.7600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 14998.7600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 14998.7600, loss: 0.0096, grad_norm: 0.0263
+2026-08-03 01:27:54,483 - mmdet3d - INFO - Epoch [51][2200/4200]	lr: 2.216e-04, eta: 4:15:39, time: 0.187, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16172.2400, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16172.2400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16172.2400, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16172.2400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16172.2400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16172.2400, loss: 0.0100, grad_norm: 0.0246
+2026-08-03 01:28:03,768 - mmdet3d - INFO - Epoch [51][2250/4200]	lr: 2.214e-04, eta: 4:15:26, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16355.2000, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 16355.2000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16355.2000, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16355.2000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16355.2000, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16355.2000, loss: 0.0099, grad_norm: 0.0203
+2026-08-03 01:28:13,182 - mmdet3d - INFO - Epoch [51][2300/4200]	lr: 2.211e-04, eta: 4:15:18, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16539.7600, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16539.7600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16539.7600, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 16539.7600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16539.7600, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16539.7600, loss: 0.0088, grad_norm: 0.0205
+2026-08-03 01:28:22,562 - mmdet3d - INFO - Epoch [51][2350/4200]	lr: 2.209e-04, eta: 4:15:09, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 15326.3800, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15326.3800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15326.3800, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 15326.3800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15326.3800, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15326.3800, loss: 0.0088, grad_norm: 0.0221
+2026-08-03 01:28:31,774 - mmdet3d - INFO - Epoch [51][2400/4200]	lr: 2.207e-04, eta: 4:14:54, time: 0.184, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17191.4600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 17191.4600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17191.4600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17191.4600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 17191.4600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17191.4600, loss: 0.0090, grad_norm: 0.0199
+2026-08-03 01:28:41,100 - mmdet3d - INFO - Epoch [51][2450/4200]	lr: 2.205e-04, eta: 4:14:43, time: 0.187, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 18195.9800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 18195.9800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 18195.9800, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 18195.9800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 18195.9800, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 18195.9800, loss: 0.0098, grad_norm: 0.0201
+2026-08-03 01:28:50,427 - mmdet3d - INFO - Epoch [51][2500/4200]	lr: 2.202e-04, eta: 4:14:32, time: 0.187, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15824.5200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15824.5200, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15824.5200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15824.5200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15824.5200, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15824.5200, loss: 0.0092, grad_norm: 0.0212
+2026-08-03 01:28:59,635 - mmdet3d - INFO - Epoch [51][2550/4200]	lr: 2.200e-04, eta: 4:14:18, time: 0.184, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 17270.6200, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 17270.6200, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17270.6200, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 17270.6200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17270.6200, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17270.6200, loss: 0.0087, grad_norm: 0.0213
+2026-08-03 01:29:08,942 - mmdet3d - INFO - Epoch [51][2600/4200]	lr: 2.198e-04, eta: 4:14:06, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 15184.5400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 15184.5400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15184.5400, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 15184.5400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15184.5400, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 15184.5400, loss: 0.0086, grad_norm: 0.0205
+2026-08-03 01:29:18,241 - mmdet3d - INFO - Epoch [51][2650/4200]	lr: 2.196e-04, eta: 4:13:55, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16574.2000, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 16574.2000, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16574.2000, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16574.2000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16574.2000, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16574.2000, loss: 0.0098, grad_norm: 0.0191
+2026-08-03 01:29:27,530 - mmdet3d - INFO - Epoch [51][2700/4200]	lr: 2.194e-04, eta: 4:13:43, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 17427.0400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 17427.0400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 17427.0400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17427.0400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17427.0400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 17427.0400, loss: 0.0096, grad_norm: 0.0190
+2026-08-03 01:29:37,020 - mmdet3d - INFO - Epoch [51][2750/4200]	lr: 2.191e-04, eta: 4:13:38, time: 0.190, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15275.9600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 15275.9600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15275.9600, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 15275.9600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15275.9600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 15275.9600, loss: 0.0084, grad_norm: 0.0192
+2026-08-03 01:29:46,651 - mmdet3d - INFO - Epoch [51][2800/4200]	lr: 2.189e-04, eta: 4:13:36, time: 0.193, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 14846.8400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 14846.8400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 14846.8400, loss/map/furniture/focal: 0.0030, stats/map/furniture/valid_pixels: 14846.8400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 14846.8400, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 14846.8400, loss: 0.0096, grad_norm: 0.0263
+2026-08-03 01:29:56,106 - mmdet3d - INFO - Epoch [51][2850/4200]	lr: 2.187e-04, eta: 4:13:29, time: 0.189, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0039, stats/map/floor/valid_pixels: 15432.5800, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 15432.5800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15432.5800, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 15432.5800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15432.5800, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 15432.5800, loss: 0.0103, grad_norm: 0.0248
+2026-08-03 01:30:05,542 - mmdet3d - INFO - Epoch [51][2900/4200]	lr: 2.185e-04, eta: 4:13:22, time: 0.189, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15496.2000, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15496.2000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15496.2000, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15496.2000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15496.2000, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 15496.2000, loss: 0.0090, grad_norm: 0.0214
+2026-08-03 01:30:15,145 - mmdet3d - INFO - Epoch [51][2950/4200]	lr: 2.183e-04, eta: 4:13:19, time: 0.192, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 16423.8400, loss/map/carpet/focal: 0.0007, stats/map/carpet/valid_pixels: 16423.8400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16423.8400, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16423.8400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16423.8400, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16423.8400, loss: 0.0089, grad_norm: 0.0211
+2026-08-03 01:30:24,658 - mmdet3d - INFO - Epoch [51][3000/4200]	lr: 2.180e-04, eta: 4:13:13, time: 0.190, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 15738.9600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15738.9600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15738.9600, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15738.9600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15738.9600, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15738.9600, loss: 0.0090, grad_norm: 0.0203
+2026-08-03 01:30:34,200 - mmdet3d - INFO - Epoch [51][3050/4200]	lr: 2.178e-04, eta: 4:13:08, time: 0.191, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 17184.7400, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 17184.7400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 17184.7400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17184.7400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17184.7400, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 17184.7400, loss: 0.0094, grad_norm: 0.0206
+2026-08-03 01:30:43,622 - mmdet3d - INFO - Epoch [51][3100/4200]	lr: 2.176e-04, eta: 4:13:00, time: 0.188, data_time: 0.007, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16429.0600, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16429.0600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16429.0600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16429.0600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16429.0600, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16429.0600, loss: 0.0095, grad_norm: 0.0190
+2026-08-03 01:30:53,016 - mmdet3d - INFO - Epoch [51][3150/4200]	lr: 2.174e-04, eta: 4:12:50, time: 0.188, data_time: 0.007, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16643.9200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16643.9200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16643.9200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16643.9200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16643.9200, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16643.9200, loss: 0.0091, grad_norm: 0.0215
+2026-08-03 01:31:02,428 - mmdet3d - INFO - Epoch [51][3200/4200]	lr: 2.172e-04, eta: 4:12:42, time: 0.188, data_time: 0.007, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16063.2200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16063.2200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16063.2200, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 16063.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16063.2200, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16063.2200, loss: 0.0097, grad_norm: 0.0215
+2026-08-03 01:31:11,845 - mmdet3d - INFO - Epoch [51][3250/4200]	lr: 2.169e-04, eta: 4:12:33, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 17620.3000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17620.3000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17620.3000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 17620.3000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17620.3000, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 17620.3000, loss: 0.0092, grad_norm: 0.0188
+2026-08-03 01:31:21,145 - mmdet3d - INFO - Epoch [51][3300/4200]	lr: 2.167e-04, eta: 4:12:22, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 14674.7600, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 14674.7600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 14674.7600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 14674.7600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 14674.7600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 14674.7600, loss: 0.0094, grad_norm: 0.0205
+2026-08-03 01:31:30,356 - mmdet3d - INFO - Epoch [51][3350/4200]	lr: 2.165e-04, eta: 4:12:08, time: 0.184, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17193.3800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17193.3800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17193.3800, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 17193.3800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17193.3800, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17193.3800, loss: 0.0091, grad_norm: 0.0187
+2026-08-03 01:31:39,690 - mmdet3d - INFO - Epoch [51][3400/4200]	lr: 2.163e-04, eta: 4:11:58, time: 0.187, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16205.1400, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16205.1400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16205.1400, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16205.1400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16205.1400, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16205.1400, loss: 0.0091, grad_norm: 0.0203
+2026-08-03 01:31:49,126 - mmdet3d - INFO - Epoch [51][3450/4200]	lr: 2.161e-04, eta: 4:11:50, time: 0.189, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0042, stats/map/floor/valid_pixels: 16462.7800, loss/map/carpet/focal: 0.0018, stats/map/carpet/valid_pixels: 16462.7800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16462.7800, loss/map/furniture/focal: 0.0055, stats/map/furniture/valid_pixels: 16462.7800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16462.7800, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16462.7800, loss: 0.0142, grad_norm: 0.0438
+2026-08-03 01:31:58,419 - mmdet3d - INFO - Epoch [51][3500/4200]	lr: 2.158e-04, eta: 4:11:38, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 16597.4400, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16597.4400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16597.4400, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 16597.4400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16597.4400, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16597.4400, loss: 0.0103, grad_norm: 0.0231
+2026-08-03 01:32:07,699 - mmdet3d - INFO - Epoch [51][3550/4200]	lr: 2.156e-04, eta: 4:11:27, time: 0.186, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17079.8600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17079.8600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17079.8600, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 17079.8600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 17079.8600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17079.8600, loss: 0.0086, grad_norm: 0.0172
+2026-08-03 01:32:17,053 - mmdet3d - INFO - Epoch [51][3600/4200]	lr: 2.154e-04, eta: 4:11:17, time: 0.187, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0029, stats/map/floor/valid_pixels: 15932.7800, loss/map/carpet/focal: 0.0019, stats/map/carpet/valid_pixels: 15932.7800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15932.7800, loss/map/furniture/focal: 0.0030, stats/map/furniture/valid_pixels: 15932.7800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15932.7800, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 15932.7800, loss: 0.0113, grad_norm: 0.0328
+2026-08-03 01:32:26,356 - mmdet3d - INFO - Epoch [51][3650/4200]	lr: 2.152e-04, eta: 4:11:06, time: 0.186, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16737.9200, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16737.9200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16737.9200, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16737.9200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16737.9200, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16737.9200, loss: 0.0091, grad_norm: 0.0176
+2026-08-03 01:32:35,755 - mmdet3d - INFO - Epoch [51][3700/4200]	lr: 2.149e-04, eta: 4:10:57, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15370.3400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15370.3400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15370.3400, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15370.3400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15370.3400, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 15370.3400, loss: 0.0089, grad_norm: 0.0252
+2026-08-03 01:32:45,079 - mmdet3d - INFO - Epoch [51][3750/4200]	lr: 2.147e-04, eta: 4:10:47, time: 0.186, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15608.0600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15608.0600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15608.0600, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 15608.0600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15608.0600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 15608.0600, loss: 0.0097, grad_norm: 0.0196
+2026-08-03 01:32:54,371 - mmdet3d - INFO - Epoch [51][3800/4200]	lr: 2.145e-04, eta: 4:10:35, time: 0.186, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16304.6400, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16304.6400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16304.6400, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16304.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16304.6400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16304.6400, loss: 0.0095, grad_norm: 0.0193
+2026-08-03 01:33:03,756 - mmdet3d - INFO - Epoch [51][3850/4200]	lr: 2.143e-04, eta: 4:10:26, time: 0.188, data_time: 0.007, memory: 2717, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 17209.6400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17209.6400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17209.6400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17209.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17209.6400, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17209.6400, loss: 0.0085, grad_norm: 0.0174
+2026-08-03 01:33:13,052 - mmdet3d - INFO - Epoch [51][3900/4200]	lr: 2.141e-04, eta: 4:10:15, time: 0.186, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16370.3000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16370.3000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16370.3000, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16370.3000, loss/map/door/focal: 0.0000, stats/map/door/valid_pixels: 16370.3000, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16370.3000, loss: 0.0097, grad_norm: 0.0201
+2026-08-03 01:33:22,424 - mmdet3d - INFO - Epoch [51][3950/4200]	lr: 2.138e-04, eta: 4:10:06, time: 0.187, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16708.5600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16708.5600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16708.5600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16708.5600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16708.5600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16708.5600, loss: 0.0088, grad_norm: 0.0181
+2026-08-03 01:33:31,849 - mmdet3d - INFO - Epoch [51][4000/4200]	lr: 2.136e-04, eta: 4:09:58, time: 0.188, data_time: 0.005, memory: 2717, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 15300.7600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15300.7600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15300.7600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 15300.7600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15300.7600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15300.7600, loss: 0.0088, grad_norm: 0.0199
+2026-08-03 01:33:41,307 - mmdet3d - INFO - Epoch [51][4050/4200]	lr: 2.134e-04, eta: 4:09:50, time: 0.189, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15757.0800, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15757.0800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15757.0800, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15757.0800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15757.0800, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15757.0800, loss: 0.0086, grad_norm: 0.0206
+2026-08-03 01:33:50,867 - mmdet3d - INFO - Epoch [51][4100/4200]	lr: 2.132e-04, eta: 4:09:44, time: 0.191, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15835.3200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15835.3200, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15835.3200, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 15835.3200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15835.3200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15835.3200, loss: 0.0095, grad_norm: 0.0255
+2026-08-03 01:34:00,261 - mmdet3d - INFO - Epoch [51][4150/4200]	lr: 2.130e-04, eta: 4:09:35, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16083.8200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16083.8200, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16083.8200, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16083.8200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16083.8200, loss/map/clutter/focal: 0.0018, stats/map/clutter/valid_pixels: 16083.8200, loss: 0.0081, grad_norm: 0.0170
+2026-08-03 01:34:09,667 - mmdet3d - INFO - Epoch [51][4200/4200]	lr: 2.127e-04, eta: 4:09:26, time: 0.188, data_time: 0.006, memory: 2717, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16262.3000, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16262.3000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16262.3000, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16262.3000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16262.3000, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16262.3000, loss: 0.0093, grad_norm: 0.0285
+2026-08-03 01:34:09,987 - mmdet3d - INFO - Saving checkpoint at 51 epochs
+2026-08-03 01:36:10,665 - mmdet3d - INFO - Early stopping: robotbev_map_iou_max=0.552981 did not improve from 0.557285 (5/6)
+2026-08-03 01:36:10,668 - mmdet3d - INFO - Baseline epoch 51: 10.696 samples/s, 2717.6 MB peak CUDA, mIoU@0.50=0.5414037704467773
+2026-08-03 01:36:10,669 - mmdet3d - INFO - Epoch(val) [51][1200]	map/floor/valid_pixels: 8531447.0000, map/floor/iou@max: 0.8967, map/floor/precision@0.50: 0.9496, map/floor/recall@0.50: 0.9414, map/floor/f1@0.50: 0.9455, map/floor/boundary_precision@0.50: 0.9670, map/floor/boundary_recall@0.50: 0.9641, map/floor/boundary_f1@0.50: 0.9656, map/floor/boundary_gt_pixels: 586394.0000, map/floor/iou@0.35: 0.8845, map/floor/iou@0.40: 0.8907, map/floor/iou@0.45: 0.8947, map/floor/iou@0.50: 0.8967, map/floor/iou@0.55: 0.8967, map/floor/iou@0.60: 0.8948, map/floor/iou@0.65: 0.8907, map/carpet/valid_pixels: 8531447.0000, map/carpet/iou@max: 0.6633, map/carpet/precision@0.50: 0.8646, map/carpet/recall@0.50: 0.7402, map/carpet/f1@0.50: 0.7975, map/carpet/boundary_precision@0.50: 0.8357, map/carpet/boundary_recall@0.50: 0.8055, map/carpet/boundary_f1@0.50: 0.8204, map/carpet/boundary_gt_pixels: 46581.0000, map/carpet/iou@0.35: 0.6441, map/carpet/iou@0.40: 0.6554, map/carpet/iou@0.45: 0.6612, map/carpet/iou@0.50: 0.6633, map/carpet/iou@0.55: 0.6604, map/carpet/iou@0.60: 0.6521, map/carpet/iou@0.65: 0.6387, map/wall/valid_pixels: 8531447.0000, map/wall/iou@max: 0.4429, map/wall/precision@0.50: 0.6357, map/wall/recall@0.50: 0.5508, map/wall/f1@0.50: 0.5902, map/wall/boundary_precision@0.50: 0.7195, map/wall/boundary_recall@0.50: 0.4681, map/wall/boundary_f1@0.50: 0.5672, map/wall/boundary_gt_pixels: 19681.0000, map/wall/iou@0.35: 0.4429, map/wall/iou@0.40: 0.4371, map/wall/iou@0.45: 0.4287, map/wall/iou@0.50: 0.4186, map/wall/iou@0.55: 0.4061, map/wall/iou@0.60: 0.3915, map/wall/iou@0.65: 0.3754, map/furniture/valid_pixels: 8531447.0000, map/furniture/iou@max: 0.5225, map/furniture/precision@0.50: 0.5610, map/furniture/recall@0.50: 0.8537, map/furniture/f1@0.50: 0.6770, map/furniture/boundary_precision@0.50: 0.6077, map/furniture/boundary_recall@0.50: 0.8992, map/furniture/boundary_f1@0.50: 0.7253, map/furniture/boundary_gt_pixels: 136183.0000, map/furniture/iou@0.35: 0.4900, map/furniture/iou@0.40: 0.4990, map/furniture/iou@0.45: 0.5060, map/furniture/iou@0.50: 0.5118, map/furniture/iou@0.55: 0.5162, map/furniture/iou@0.60: 0.5199, map/furniture/iou@0.65: 0.5225, map/door/valid_pixels: 8531447.0000, map/door/iou@max: 0.4263, map/door/precision@0.50: 0.5865, map/door/recall@0.50: 0.6008, map/door/f1@0.50: 0.5936, map/door/boundary_precision@0.50: 0.7698, map/door/boundary_recall@0.50: 0.8300, map/door/boundary_f1@0.50: 0.7988, map/door/boundary_gt_pixels: 7571.0000, map/door/iou@0.35: 0.4219, map/door/iou@0.40: 0.4253, map/door/iou@0.45: 0.4263, map/door/iou@0.50: 0.4221, map/door/iou@0.55: 0.4150, map/door/iou@0.60: 0.4043, map/door/iou@0.65: 0.3872, map/clutter/valid_pixels: 8531447.0000, map/clutter/iou@max: 0.3662, map/clutter/precision@0.50: 0.6832, map/clutter/recall@0.50: 0.3980, map/clutter/f1@0.50: 0.5030, map/clutter/boundary_precision@0.50: 0.7554, map/clutter/boundary_recall@0.50: 0.5188, map/clutter/boundary_f1@0.50: 0.6151, map/clutter/boundary_gt_pixels: 147846.0000, map/clutter/iou@0.35: 0.3662, map/clutter/iou@0.40: 0.3584, map/clutter/iou@0.45: 0.3487, map/clutter/iou@0.50: 0.3360, map/clutter/iou@0.55: 0.3208, map/clutter/iou@0.60: 0.3024, map/clutter/iou@0.65: 0.2797, map/mean/iou@0.50: 0.5414, map/mean/iou@max: 0.5530, map/mean/precision@0.50: 0.7134, map/mean/recall@0.50: 0.6808, map/mean/f1@0.50: 0.6845, map/mean/boundary_f1@0.50: 0.7487, robotbev_map_iou_50: 0.5414, robotbev_map_iou_max: 0.5530, robotbev_map_f1_50: 0.6845, robotbev_boundary_f1_50: 0.7487
+2026-08-03 01:36:22,807 - mmdet3d - INFO - Epoch [52][50/4200]	lr: 2.125e-04, eta: 4:10:08, time: 0.242, data_time: 0.060, memory: 2639, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 15883.2200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15883.2200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15883.2200, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 15883.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15883.2200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15883.2200, loss: 0.0087, grad_norm: 0.0196
+2026-08-03 01:36:32,195 - mmdet3d - INFO - Epoch [52][100/4200]	lr: 2.123e-04, eta: 4:09:59, time: 0.188, data_time: 0.005, memory: 2662, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16384.7800, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16384.7800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16384.7800, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16384.7800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16384.7800, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16384.7800, loss: 0.0090, grad_norm: 0.0225
+2026-08-03 01:36:41,507 - mmdet3d - INFO - Epoch [52][150/4200]	lr: 2.121e-04, eta: 4:09:47, time: 0.186, data_time: 0.005, memory: 2662, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 16219.0400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16219.0400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16219.0400, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16219.0400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16219.0400, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16219.0400, loss: 0.0084, grad_norm: 0.0220
+2026-08-03 01:36:51,182 - mmdet3d - INFO - Epoch [52][200/4200]	lr: 2.119e-04, eta: 4:09:43, time: 0.193, data_time: 0.006, memory: 2662, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16415.6600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16415.6600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16415.6600, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16415.6600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16415.6600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16415.6600, loss: 0.0093, grad_norm: 0.0257
+2026-08-03 01:37:00,455 - mmdet3d - INFO - Epoch [52][250/4200]	lr: 2.116e-04, eta: 4:09:31, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16650.6400, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16650.6400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16650.6400, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16650.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16650.6400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16650.6400, loss: 0.0096, grad_norm: 0.0214
+2026-08-03 01:37:09,693 - mmdet3d - INFO - Epoch [52][300/4200]	lr: 2.114e-04, eta: 4:09:18, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 17437.3600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17437.3600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 17437.3600, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 17437.3600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17437.3600, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 17437.3600, loss: 0.0085, grad_norm: 0.0262
+2026-08-03 01:37:18,920 - mmdet3d - INFO - Epoch [52][350/4200]	lr: 2.112e-04, eta: 4:09:06, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16176.5600, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16176.5600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16176.5600, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16176.5600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16176.5600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16176.5600, loss: 0.0088, grad_norm: 0.0184
+2026-08-03 01:37:28,171 - mmdet3d - INFO - Epoch [52][400/4200]	lr: 2.110e-04, eta: 4:08:54, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16448.8600, loss/map/carpet/focal: 0.0006, stats/map/carpet/valid_pixels: 16448.8600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16448.8600, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16448.8600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16448.8600, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16448.8600, loss: 0.0084, grad_norm: 0.0195
+2026-08-03 01:37:37,439 - mmdet3d - INFO - Epoch [52][450/4200]	lr: 2.108e-04, eta: 4:08:42, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 16215.7400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16215.7400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16215.7400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16215.7400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16215.7400, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16215.7400, loss: 0.0091, grad_norm: 0.0207
+2026-08-03 01:37:46,550 - mmdet3d - INFO - Epoch [52][500/4200]	lr: 2.105e-04, eta: 4:08:28, time: 0.182, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16649.1600, loss/map/carpet/focal: 0.0006, stats/map/carpet/valid_pixels: 16649.1600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16649.1600, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16649.1600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16649.1600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16649.1600, loss: 0.0083, grad_norm: 0.0195
+2026-08-03 01:37:55,861 - mmdet3d - INFO - Epoch [52][550/4200]	lr: 2.103e-04, eta: 4:08:17, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 15741.1000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15741.1000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15741.1000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 15741.1000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15741.1000, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 15741.1000, loss: 0.0093, grad_norm: 0.0192
+2026-08-03 01:38:05,163 - mmdet3d - INFO - Epoch [52][600/4200]	lr: 2.101e-04, eta: 4:08:06, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16247.4600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16247.4600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16247.4600, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16247.4600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16247.4600, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16247.4600, loss: 0.0098, grad_norm: 0.0208
+2026-08-03 01:38:14,486 - mmdet3d - INFO - Epoch [52][650/4200]	lr: 2.099e-04, eta: 4:07:55, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16245.1000, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16245.1000, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16245.1000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16245.1000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16245.1000, loss/map/clutter/focal: 0.0017, stats/map/clutter/valid_pixels: 16245.1000, loss: 0.0082, grad_norm: 0.0212
+2026-08-03 01:38:23,829 - mmdet3d - INFO - Epoch [52][700/4200]	lr: 2.097e-04, eta: 4:07:45, time: 0.187, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15238.5200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15238.5200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15238.5200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15238.5200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15238.5200, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 15238.5200, loss: 0.0089, grad_norm: 0.0198
+2026-08-03 01:38:33,244 - mmdet3d - INFO - Epoch [52][750/4200]	lr: 2.094e-04, eta: 4:07:36, time: 0.188, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16822.0800, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16822.0800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16822.0800, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16822.0800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16822.0800, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16822.0800, loss: 0.0087, grad_norm: 0.0199
+2026-08-03 01:38:42,709 - mmdet3d - INFO - Epoch [52][800/4200]	lr: 2.092e-04, eta: 4:07:27, time: 0.189, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 16081.9000, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16081.9000, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16081.9000, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 16081.9000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16081.9000, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16081.9000, loss: 0.0081, grad_norm: 0.0180
+2026-08-03 01:38:52,010 - mmdet3d - INFO - Epoch [52][850/4200]	lr: 2.090e-04, eta: 4:07:17, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16096.6200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16096.6200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16096.6200, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16096.6200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16096.6200, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16096.6200, loss: 0.0088, grad_norm: 0.0268
+2026-08-03 01:39:01,293 - mmdet3d - INFO - Epoch [52][900/4200]	lr: 2.088e-04, eta: 4:07:05, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16528.1600, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16528.1600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16528.1600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16528.1600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16528.1600, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16528.1600, loss: 0.0091, grad_norm: 0.0194
+2026-08-03 01:39:10,622 - mmdet3d - INFO - Epoch [52][950/4200]	lr: 2.086e-04, eta: 4:06:55, time: 0.187, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 15061.0200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15061.0200, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15061.0200, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 15061.0200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15061.0200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15061.0200, loss: 0.0086, grad_norm: 0.0224
+2026-08-03 01:39:20,024 - mmdet3d - INFO - Epoch [52][1000/4200]	lr: 2.084e-04, eta: 4:06:46, time: 0.188, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16283.9600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16283.9600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16283.9600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16283.9600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16283.9600, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16283.9600, loss: 0.0089, grad_norm: 0.0199
+2026-08-03 01:39:29,304 - mmdet3d - INFO - Epoch [52][1050/4200]	lr: 2.081e-04, eta: 4:06:35, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16615.9800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16615.9800, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16615.9800, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16615.9800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16615.9800, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16615.9800, loss: 0.0090, grad_norm: 0.0207
+2026-08-03 01:39:38,502 - mmdet3d - INFO - Epoch [52][1100/4200]	lr: 2.079e-04, eta: 4:06:22, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15902.2800, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15902.2800, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15902.2800, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 15902.2800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15902.2800, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15902.2800, loss: 0.0095, grad_norm: 0.0216
+2026-08-03 01:39:47,757 - mmdet3d - INFO - Epoch [52][1150/4200]	lr: 2.077e-04, eta: 4:06:11, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16832.9600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16832.9600, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16832.9600, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 16832.9600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16832.9600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16832.9600, loss: 0.0092, grad_norm: 0.0270
+2026-08-03 01:39:57,314 - mmdet3d - INFO - Epoch [52][1200/4200]	lr: 2.075e-04, eta: 4:06:04, time: 0.191, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0029, stats/map/floor/valid_pixels: 15160.2000, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 15160.2000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15160.2000, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15160.2000, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15160.2000, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 15160.2000, loss: 0.0093, grad_norm: 0.0249
+2026-08-03 01:40:06,690 - mmdet3d - INFO - Epoch [52][1250/4200]	lr: 2.073e-04, eta: 4:05:54, time: 0.188, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17079.6800, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 17079.6800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17079.6800, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 17079.6800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17079.6800, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 17079.6800, loss: 0.0086, grad_norm: 0.0189
+2026-08-03 01:40:15,976 - mmdet3d - INFO - Epoch [52][1300/4200]	lr: 2.070e-04, eta: 4:05:43, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16985.3200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16985.3200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16985.3200, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16985.3200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16985.3200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16985.3200, loss: 0.0095, grad_norm: 0.0193
+2026-08-03 01:40:25,204 - mmdet3d - INFO - Epoch [52][1350/4200]	lr: 2.068e-04, eta: 4:05:32, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16488.0000, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16488.0000, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16488.0000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16488.0000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16488.0000, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16488.0000, loss: 0.0094, grad_norm: 0.0225
+2026-08-03 01:40:34,511 - mmdet3d - INFO - Epoch [52][1400/4200]	lr: 2.066e-04, eta: 4:05:21, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 16869.0800, loss/map/carpet/focal: 0.0015, stats/map/carpet/valid_pixels: 16869.0800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16869.0800, loss/map/furniture/focal: 0.0030, stats/map/furniture/valid_pixels: 16869.0800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16869.0800, loss/map/clutter/focal: 0.0026, stats/map/clutter/valid_pixels: 16869.0800, loss: 0.0099, grad_norm: 0.0182
+2026-08-03 01:40:43,751 - mmdet3d - INFO - Epoch [52][1450/4200]	lr: 2.064e-04, eta: 4:05:10, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 17465.3000, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17465.3000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17465.3000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 17465.3000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17465.3000, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 17465.3000, loss: 0.0089, grad_norm: 0.0186
+2026-08-03 01:40:52,944 - mmdet3d - INFO - Epoch [52][1500/4200]	lr: 2.062e-04, eta: 4:04:58, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 17594.3200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 17594.3200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17594.3200, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17594.3200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17594.3200, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 17594.3200, loss: 0.0083, grad_norm: 0.0172
+2026-08-03 01:41:02,041 - mmdet3d - INFO - Epoch [52][1550/4200]	lr: 2.059e-04, eta: 4:04:44, time: 0.182, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16175.3200, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16175.3200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16175.3200, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 16175.3200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16175.3200, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16175.3200, loss: 0.0088, grad_norm: 0.0188
+2026-08-03 01:41:11,321 - mmdet3d - INFO - Epoch [52][1600/4200]	lr: 2.057e-04, eta: 4:04:34, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16235.2200, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16235.2200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16235.2200, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16235.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16235.2200, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16235.2200, loss: 0.0090, grad_norm: 0.0294
+2026-08-03 01:41:20,550 - mmdet3d - INFO - Epoch [52][1650/4200]	lr: 2.055e-04, eta: 4:04:22, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 16324.8200, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 16324.8200, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16324.8200, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16324.8200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16324.8200, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16324.8200, loss: 0.0087, grad_norm: 0.0208
+2026-08-03 01:41:29,758 - mmdet3d - INFO - Epoch [52][1700/4200]	lr: 2.053e-04, eta: 4:04:10, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 17372.2400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 17372.2400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17372.2400, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 17372.2400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17372.2400, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 17372.2400, loss: 0.0092, grad_norm: 0.0195
+2026-08-03 01:41:39,166 - mmdet3d - INFO - Epoch [52][1750/4200]	lr: 2.051e-04, eta: 4:04:01, time: 0.188, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16671.6600, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16671.6600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16671.6600, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16671.6600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16671.6600, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16671.6600, loss: 0.0091, grad_norm: 0.0194
+2026-08-03 01:41:48,725 - mmdet3d - INFO - Epoch [52][1800/4200]	lr: 2.048e-04, eta: 4:03:54, time: 0.191, data_time: 0.008, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16068.6800, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16068.6800, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16068.6800, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16068.6800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16068.6800, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16068.6800, loss: 0.0093, grad_norm: 0.0247
+2026-08-03 01:41:57,987 - mmdet3d - INFO - Epoch [52][1850/4200]	lr: 2.046e-04, eta: 4:03:43, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 15674.6000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15674.6000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15674.6000, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 15674.6000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15674.6000, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15674.6000, loss: 0.0083, grad_norm: 0.0207
+2026-08-03 01:42:07,414 - mmdet3d - INFO - Epoch [52][1900/4200]	lr: 2.044e-04, eta: 4:03:35, time: 0.189, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 15508.6600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15508.6600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15508.6600, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 15508.6600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15508.6600, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 15508.6600, loss: 0.0090, grad_norm: 0.0207
+2026-08-03 01:42:16,860 - mmdet3d - INFO - Epoch [52][1950/4200]	lr: 2.042e-04, eta: 4:03:26, time: 0.189, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16538.2200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16538.2200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16538.2200, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 16538.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16538.2200, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16538.2200, loss: 0.0083, grad_norm: 0.0217
+2026-08-03 01:42:26,007 - mmdet3d - INFO - Epoch [52][2000/4200]	lr: 2.040e-04, eta: 4:03:14, time: 0.183, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16066.7000, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16066.7000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16066.7000, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16066.7000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16066.7000, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 16066.7000, loss: 0.0093, grad_norm: 0.0218
+2026-08-03 01:42:35,210 - mmdet3d - INFO - Epoch [52][2050/4200]	lr: 2.037e-04, eta: 4:03:02, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16531.8600, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 16531.8600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16531.8600, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 16531.8600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16531.8600, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16531.8600, loss: 0.0097, grad_norm: 0.0234
+2026-08-03 01:42:44,555 - mmdet3d - INFO - Epoch [52][2100/4200]	lr: 2.035e-04, eta: 4:02:52, time: 0.187, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15497.4800, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15497.4800, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15497.4800, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15497.4800, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15497.4800, loss/map/clutter/focal: 0.0018, stats/map/clutter/valid_pixels: 15497.4800, loss: 0.0090, grad_norm: 0.0214
+2026-08-03 01:42:53,743 - mmdet3d - INFO - Epoch [52][2150/4200]	lr: 2.033e-04, eta: 4:02:41, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15383.6200, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 15383.6200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15383.6200, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 15383.6200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15383.6200, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 15383.6200, loss: 0.0102, grad_norm: 0.0213
+2026-08-03 01:43:02,955 - mmdet3d - INFO - Epoch [52][2200/4200]	lr: 2.031e-04, eta: 4:02:29, time: 0.184, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 15844.7800, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15844.7800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15844.7800, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 15844.7800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15844.7800, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 15844.7800, loss: 0.0084, grad_norm: 0.0204
+2026-08-03 01:43:12,151 - mmdet3d - INFO - Epoch [52][2250/4200]	lr: 2.029e-04, eta: 4:02:18, time: 0.184, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16154.4800, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16154.4800, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16154.4800, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16154.4800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16154.4800, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16154.4800, loss: 0.0092, grad_norm: 0.0240
+2026-08-03 01:43:21,453 - mmdet3d - INFO - Epoch [52][2300/4200]	lr: 2.027e-04, eta: 4:02:08, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0032, stats/map/floor/valid_pixels: 16583.0200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16583.0200, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 16583.0200, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 16583.0200, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16583.0200, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16583.0200, loss: 0.0108, grad_norm: 0.0247
+2026-08-03 01:43:30,662 - mmdet3d - INFO - Epoch [52][2350/4200]	lr: 2.024e-04, eta: 4:01:56, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15904.7400, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 15904.7400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15904.7400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 15904.7400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15904.7400, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15904.7400, loss: 0.0095, grad_norm: 0.0204
+2026-08-03 01:43:39,972 - mmdet3d - INFO - Epoch [52][2400/4200]	lr: 2.022e-04, eta: 4:01:46, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 14351.0400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 14351.0400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 14351.0400, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 14351.0400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 14351.0400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 14351.0400, loss: 0.0099, grad_norm: 0.0230
+2026-08-03 01:43:49,196 - mmdet3d - INFO - Epoch [52][2450/4200]	lr: 2.020e-04, eta: 4:01:35, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 15637.0000, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15637.0000, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15637.0000, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 15637.0000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15637.0000, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 15637.0000, loss: 0.0085, grad_norm: 0.0206
+2026-08-03 01:43:58,387 - mmdet3d - INFO - Epoch [52][2500/4200]	lr: 2.018e-04, eta: 4:01:24, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15837.2200, loss/map/carpet/focal: 0.0007, stats/map/carpet/valid_pixels: 15837.2200, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 15837.2200, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 15837.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15837.2200, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 15837.2200, loss: 0.0092, grad_norm: 0.0224
+2026-08-03 01:44:07,603 - mmdet3d - INFO - Epoch [52][2550/4200]	lr: 2.016e-04, eta: 4:01:13, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 14789.0200, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 14789.0200, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 14789.0200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 14789.0200, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 14789.0200, loss/map/clutter/focal: 0.0028, stats/map/clutter/valid_pixels: 14789.0200, loss: 0.0095, grad_norm: 0.0229
+2026-08-03 01:44:16,777 - mmdet3d - INFO - Epoch [52][2600/4200]	lr: 2.013e-04, eta: 4:01:01, time: 0.183, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0032, stats/map/floor/valid_pixels: 15176.5200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15176.5200, loss/map/wall/focal: 0.0009, stats/map/wall/valid_pixels: 15176.5200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 15176.5200, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15176.5200, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 15176.5200, loss: 0.0104, grad_norm: 0.0284
+2026-08-03 01:44:25,857 - mmdet3d - INFO - Epoch [52][2650/4200]	lr: 2.011e-04, eta: 4:00:48, time: 0.182, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 17372.7000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17372.7000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17372.7000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 17372.7000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17372.7000, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 17372.7000, loss: 0.0090, grad_norm: 0.0177
+2026-08-03 01:44:35,134 - mmdet3d - INFO - Epoch [52][2700/4200]	lr: 2.009e-04, eta: 4:00:38, time: 0.186, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0028, stats/map/floor/valid_pixels: 15714.4400, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15714.4400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 15714.4400, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 15714.4400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15714.4400, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 15714.4400, loss: 0.0085, grad_norm: 0.0188
+2026-08-03 01:44:44,375 - mmdet3d - INFO - Epoch [52][2750/4200]	lr: 2.007e-04, eta: 4:00:27, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16332.6400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16332.6400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16332.6400, loss/map/furniture/focal: 0.0033, stats/map/furniture/valid_pixels: 16332.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16332.6400, loss/map/clutter/focal: 0.0027, stats/map/clutter/valid_pixels: 16332.6400, loss: 0.0102, grad_norm: 0.0268
+2026-08-03 01:44:53,649 - mmdet3d - INFO - Epoch [52][2800/4200]	lr: 2.005e-04, eta: 4:00:17, time: 0.185, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16475.9800, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16475.9800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16475.9800, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16475.9800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16475.9800, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16475.9800, loss: 0.0093, grad_norm: 0.0216
+2026-08-03 01:45:02,878 - mmdet3d - INFO - Epoch [52][2850/4200]	lr: 2.003e-04, eta: 4:00:06, time: 0.185, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 14924.9600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 14924.9600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 14924.9600, loss/map/furniture/focal: 0.0022, stats/map/furniture/valid_pixels: 14924.9600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 14924.9600, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 14924.9600, loss: 0.0087, grad_norm: 0.0195
+2026-08-03 01:45:11,974 - mmdet3d - INFO - Epoch [52][2900/4200]	lr: 2.000e-04, eta: 3:59:54, time: 0.182, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16814.3600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16814.3600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16814.3600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16814.3600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16814.3600, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16814.3600, loss: 0.0088, grad_norm: 0.0189
+2026-08-03 01:45:21,158 - mmdet3d - INFO - Epoch [52][2950/4200]	lr: 1.998e-04, eta: 3:59:43, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16202.5200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16202.5200, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16202.5200, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16202.5200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16202.5200, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16202.5200, loss: 0.0084, grad_norm: 0.0191
+2026-08-03 01:45:30,370 - mmdet3d - INFO - Epoch [52][3000/4200]	lr: 1.996e-04, eta: 3:59:32, time: 0.184, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16608.0800, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16608.0800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16608.0800, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16608.0800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16608.0800, loss/map/clutter/focal: 0.0024, stats/map/clutter/valid_pixels: 16608.0800, loss: 0.0095, grad_norm: 0.0235
+2026-08-03 01:45:39,678 - mmdet3d - INFO - Epoch [52][3050/4200]	lr: 1.994e-04, eta: 3:59:22, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 15907.2200, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 15907.2200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15907.2200, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 15907.2200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15907.2200, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 15907.2200, loss: 0.0086, grad_norm: 0.0191
+2026-08-03 01:45:48,816 - mmdet3d - INFO - Epoch [52][3100/4200]	lr: 1.992e-04, eta: 3:59:10, time: 0.183, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16317.9400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16317.9400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16317.9400, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16317.9400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16317.9400, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16317.9400, loss: 0.0088, grad_norm: 0.0212
+2026-08-03 01:45:57,914 - mmdet3d - INFO - Epoch [52][3150/4200]	lr: 1.989e-04, eta: 3:58:58, time: 0.182, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16556.1600, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16556.1600, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16556.1600, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 16556.1600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16556.1600, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16556.1600, loss: 0.0092, grad_norm: 0.0207
+2026-08-03 01:46:07,228 - mmdet3d - INFO - Epoch [52][3200/4200]	lr: 1.987e-04, eta: 3:58:48, time: 0.186, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 16239.7800, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16239.7800, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 16239.7800, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 16239.7800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16239.7800, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16239.7800, loss: 0.0084, grad_norm: 0.0201
+2026-08-03 01:46:16,485 - mmdet3d - INFO - Epoch [52][3250/4200]	lr: 1.985e-04, eta: 3:58:38, time: 0.185, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16809.9000, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16809.9000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16809.9000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16809.9000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16809.9000, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 16809.9000, loss: 0.0086, grad_norm: 0.0190
+2026-08-03 01:46:25,931 - mmdet3d - INFO - Epoch [52][3300/4200]	lr: 1.983e-04, eta: 3:58:30, time: 0.189, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0029, stats/map/floor/valid_pixels: 17526.3400, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17526.3400, loss/map/wall/focal: 0.0008, stats/map/wall/valid_pixels: 17526.3400, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 17526.3400, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 17526.3400, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 17526.3400, loss: 0.0093, grad_norm: 0.0216
+2026-08-03 01:46:35,278 - mmdet3d - INFO - Epoch [52][3350/4200]	lr: 1.981e-04, eta: 3:58:20, time: 0.187, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 15824.2000, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 15824.2000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15824.2000, loss/map/furniture/focal: 0.0029, stats/map/furniture/valid_pixels: 15824.2000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 15824.2000, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 15824.2000, loss: 0.0093, grad_norm: 0.0242
+2026-08-03 01:46:44,697 - mmdet3d - INFO - Epoch [52][3400/4200]	lr: 1.979e-04, eta: 3:58:12, time: 0.188, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0026, stats/map/floor/valid_pixels: 16930.0400, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16930.0400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16930.0400, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 16930.0400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16930.0400, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16930.0400, loss: 0.0100, grad_norm: 0.0213
+2026-08-03 01:46:54,045 - mmdet3d - INFO - Epoch [52][3450/4200]	lr: 1.976e-04, eta: 3:58:02, time: 0.187, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17222.8000, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17222.8000, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17222.8000, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 17222.8000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17222.8000, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 17222.8000, loss: 0.0092, grad_norm: 0.0187
+2026-08-03 01:47:03,203 - mmdet3d - INFO - Epoch [52][3500/4200]	lr: 1.974e-04, eta: 3:57:51, time: 0.183, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0027, stats/map/floor/valid_pixels: 17185.5800, loss/map/carpet/focal: 0.0012, stats/map/carpet/valid_pixels: 17185.5800, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 17185.5800, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 17185.5800, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17185.5800, loss/map/clutter/focal: 0.0019, stats/map/clutter/valid_pixels: 17185.5800, loss: 0.0092, grad_norm: 0.0193
+2026-08-03 01:47:12,551 - mmdet3d - INFO - Epoch [52][3550/4200]	lr: 1.972e-04, eta: 3:57:41, time: 0.187, data_time: 0.007, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16252.4000, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16252.4000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16252.4000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16252.4000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16252.4000, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16252.4000, loss: 0.0093, grad_norm: 0.0250
+2026-08-03 01:47:21,896 - mmdet3d - INFO - Epoch [52][3600/4200]	lr: 1.970e-04, eta: 3:57:32, time: 0.187, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16250.4200, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 16250.4200, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16250.4200, loss/map/furniture/focal: 0.0020, stats/map/furniture/valid_pixels: 16250.4200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16250.4200, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16250.4200, loss: 0.0084, grad_norm: 0.0169
+2026-08-03 01:47:31,135 - mmdet3d - INFO - Epoch [52][3650/4200]	lr: 1.968e-04, eta: 3:57:22, time: 0.185, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16052.9600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16052.9600, loss/map/wall/focal: 0.0005, stats/map/wall/valid_pixels: 16052.9600, loss/map/furniture/focal: 0.0023, stats/map/furniture/valid_pixels: 16052.9600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16052.9600, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16052.9600, loss: 0.0082, grad_norm: 0.0205
+2026-08-03 01:47:40,261 - mmdet3d - INFO - Epoch [52][3700/4200]	lr: 1.965e-04, eta: 3:57:10, time: 0.183, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16056.2400, loss/map/carpet/focal: 0.0014, stats/map/carpet/valid_pixels: 16056.2400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16056.2400, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16056.2400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16056.2400, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16056.2400, loss: 0.0094, grad_norm: 0.0235
+2026-08-03 01:47:49,462 - mmdet3d - INFO - Epoch [52][3750/4200]	lr: 1.963e-04, eta: 3:56:59, time: 0.184, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0029, stats/map/floor/valid_pixels: 16323.9000, loss/map/carpet/focal: 0.0010, stats/map/carpet/valid_pixels: 16323.9000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16323.9000, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 16323.9000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16323.9000, loss/map/clutter/focal: 0.0017, stats/map/clutter/valid_pixels: 16323.9000, loss: 0.0089, grad_norm: 0.0195
+2026-08-03 01:47:58,518 - mmdet3d - INFO - Epoch [52][3800/4200]	lr: 1.961e-04, eta: 3:56:47, time: 0.181, data_time: 0.005, memory: 2720, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 17168.1600, loss/map/carpet/focal: 0.0009, stats/map/carpet/valid_pixels: 17168.1600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 17168.1600, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 17168.1600, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 17168.1600, loss/map/clutter/focal: 0.0039, stats/map/clutter/valid_pixels: 17168.1600, loss: 0.0112, grad_norm: inf
+2026-08-03 01:48:07,647 - mmdet3d - INFO - Epoch [52][3850/4200]	lr: 1.959e-04, eta: 3:56:36, time: 0.183, data_time: 0.006, memory: 2720, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16498.0000, loss/map/carpet/focal: 0.0007, stats/map/carpet/valid_pixels: 16498.0000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16498.0000, loss/map/furniture/focal: 0.0027, stats/map/furniture/valid_pixels: 16498.0000, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16498.0000, loss/map/clutter/focal: 0.0022, stats/map/clutter/valid_pixels: 16498.0000, loss: 0.0089, grad_norm: 0.0201
+2026-08-03 01:48:16,768 - mmdet3d - INFO - Epoch [52][3900/4200]	lr: 1.957e-04, eta: 3:56:24, time: 0.182, data_time: 0.007, memory: 2734, loss/map/floor/focal: 0.0031, stats/map/floor/valid_pixels: 16546.6400, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16546.6400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16546.6400, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16546.6400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16546.6400, loss/map/clutter/focal: 0.0021, stats/map/clutter/valid_pixels: 16546.6400, loss: 0.0098, grad_norm: 0.0225
+2026-08-03 01:48:25,855 - mmdet3d - INFO - Epoch [52][3950/4200]	lr: 1.955e-04, eta: 3:56:13, time: 0.182, data_time: 0.006, memory: 2734, loss/map/floor/focal: 0.0021, stats/map/floor/valid_pixels: 15708.8400, loss/map/carpet/focal: 0.0015, stats/map/carpet/valid_pixels: 15708.8400, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15708.8400, loss/map/furniture/focal: 0.0025, stats/map/furniture/valid_pixels: 15708.8400, loss/map/door/focal: 0.0000, stats/map/door/valid_pixels: 15708.8400, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 15708.8400, loss: 0.0088, grad_norm: 0.0228
+2026-08-03 01:48:34,962 - mmdet3d - INFO - Epoch [52][4000/4200]	lr: 1.952e-04, eta: 3:56:01, time: 0.182, data_time: 0.006, memory: 2734, loss/map/floor/focal: 0.0023, stats/map/floor/valid_pixels: 16496.4200, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16496.4200, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16496.4200, loss/map/furniture/focal: 0.0031, stats/map/furniture/valid_pixels: 16496.4200, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16496.4200, loss/map/clutter/focal: 0.0025, stats/map/clutter/valid_pixels: 16496.4200, loss: 0.0099, grad_norm: 0.0211
+2026-08-03 01:48:44,022 - mmdet3d - INFO - Epoch [52][4050/4200]	lr: 1.950e-04, eta: 3:55:49, time: 0.181, data_time: 0.005, memory: 2734, loss/map/floor/focal: 0.0024, stats/map/floor/valid_pixels: 16427.4400, loss/map/carpet/focal: 0.0011, stats/map/carpet/valid_pixels: 16427.4400, loss/map/wall/focal: 0.0006, stats/map/wall/valid_pixels: 16427.4400, loss/map/furniture/focal: 0.0028, stats/map/furniture/valid_pixels: 16427.4400, loss/map/door/focal: 0.0001, stats/map/door/valid_pixels: 16427.4400, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 16427.4400, loss: 0.0093, grad_norm: 0.0227
+2026-08-03 01:48:53,111 - mmdet3d - INFO - Epoch [52][4100/4200]	lr: 1.948e-04, eta: 3:55:37, time: 0.182, data_time: 0.005, memory: 2734, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16980.8000, loss/map/carpet/focal: 0.0013, stats/map/carpet/valid_pixels: 16980.8000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16980.8000, loss/map/furniture/focal: 0.0026, stats/map/furniture/valid_pixels: 16980.8000, loss/map/door/focal: 0.0000, stats/map/door/valid_pixels: 16980.8000, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16980.8000, loss: 0.0092, grad_norm: 0.0200
+2026-08-03 01:49:02,294 - mmdet3d - INFO - Epoch [52][4150/4200]	lr: 1.946e-04, eta: 3:55:27, time: 0.184, data_time: 0.005, memory: 2734, loss/map/floor/focal: 0.0025, stats/map/floor/valid_pixels: 16544.9600, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 16544.9600, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 16544.9600, loss/map/furniture/focal: 0.0024, stats/map/furniture/valid_pixels: 16544.9600, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 16544.9600, loss/map/clutter/focal: 0.0020, stats/map/clutter/valid_pixels: 16544.9600, loss: 0.0086, grad_norm: 0.0192
+2026-08-03 01:49:11,588 - mmdet3d - INFO - Epoch [52][4200/4200]	lr: 1.944e-04, eta: 3:55:17, time: 0.186, data_time: 0.005, memory: 2734, loss/map/floor/focal: 0.0022, stats/map/floor/valid_pixels: 15642.2000, loss/map/carpet/focal: 0.0008, stats/map/carpet/valid_pixels: 15642.2000, loss/map/wall/focal: 0.0007, stats/map/wall/valid_pixels: 15642.2000, loss/map/furniture/focal: 0.0021, stats/map/furniture/valid_pixels: 15642.2000, loss/map/door/focal: 0.0002, stats/map/door/valid_pixels: 15642.2000, loss/map/clutter/focal: 0.0023, stats/map/clutter/valid_pixels: 15642.2000, loss: 0.0082, grad_norm: 0.0187
+2026-08-03 01:49:12,565 - mmdet3d - INFO - Saving checkpoint at 52 epochs
+2026-08-03 01:51:10,462 - mmdet3d - INFO - The previous best checkpoint /output/base/original_a6_bs2/best_robotbev_map_iou_max_epoch_46.pth was removed
+2026-08-03 01:51:11,184 - mmdet3d - INFO - Now best checkpoint is saved as best_robotbev_map_iou_max_epoch_52.pth.
+2026-08-03 01:51:11,185 - mmdet3d - INFO - Best robotbev_map_iou_max is 0.5574 at 52 epoch.
+2026-08-03 01:51:11,246 - mmdet3d - INFO - Early stopping: robotbev_map_iou_max=0.557380 did not improve from 0.557285 (6/6)
+2026-08-03 01:51:11,246 - mmdet3d - WARNING - Early stopping triggered at epoch 52; best robotbev_map_iou_max=0.557285 at epoch 46
+2026-08-03 01:51:11,248 - mmdet3d - INFO - Baseline epoch 52: 10.794 samples/s, 2734.5 MB peak CUDA, mIoU@0.50=0.54368656873703
+2026-08-03 01:51:11,248 - mmdet3d - INFO - Epoch(val) [52][1200]	map/floor/valid_pixels: 8531447.0000, map/floor/iou@max: 0.8952, map/floor/precision@0.50: 0.9453, map/floor/recall@0.50: 0.9435, map/floor/f1@0.50: 0.9444, map/floor/boundary_precision@0.50: 0.9596, map/floor/boundary_recall@0.50: 0.9672, map/floor/boundary_f1@0.50: 0.9634, map/floor/boundary_gt_pixels: 586394.0000, map/floor/iou@0.35: 0.8830, map/floor/iou@0.40: 0.8886, map/floor/iou@0.45: 0.8924, map/floor/iou@0.50: 0.8947, map/floor/iou@0.55: 0.8952, map/floor/iou@0.60: 0.8939, map/floor/iou@0.65: 0.8905, map/carpet/valid_pixels: 8531447.0000, map/carpet/iou@max: 0.7040, map/carpet/precision@0.50: 0.9170, map/carpet/recall@0.50: 0.7485, map/carpet/f1@0.50: 0.8242, map/carpet/boundary_precision@0.50: 0.9156, map/carpet/boundary_recall@0.50: 0.8186, map/carpet/boundary_f1@0.50: 0.8644, map/carpet/boundary_gt_pixels: 46581.0000, map/carpet/iou@0.35: 0.6981, map/carpet/iou@0.40: 0.7033, map/carpet/iou@0.45: 0.7040, map/carpet/iou@0.50: 0.7010, map/carpet/iou@0.55: 0.6943, map/carpet/iou@0.60: 0.6844, map/carpet/iou@0.65: 0.6694, map/wall/valid_pixels: 8531447.0000, map/wall/iou@max: 0.4496, map/wall/precision@0.50: 0.6486, map/wall/recall@0.50: 0.5437, map/wall/f1@0.50: 0.5916, map/wall/boundary_precision@0.50: 0.7380, map/wall/boundary_recall@0.50: 0.4665, map/wall/boundary_f1@0.50: 0.5716, map/wall/boundary_gt_pixels: 19681.0000, map/wall/iou@0.35: 0.4496, map/wall/iou@0.40: 0.4412, map/wall/iou@0.45: 0.4318, map/wall/iou@0.50: 0.4200, map/wall/iou@0.55: 0.4063, map/wall/iou@0.60: 0.3915, map/wall/iou@0.65: 0.3733, map/furniture/valid_pixels: 8531447.0000, map/furniture/iou@max: 0.5237, map/furniture/precision@0.50: 0.5533, map/furniture/recall@0.50: 0.8684, map/furniture/f1@0.50: 0.6759, map/furniture/boundary_precision@0.50: 0.6087, map/furniture/boundary_recall@0.50: 0.9194, map/furniture/boundary_f1@0.50: 0.7324, map/furniture/boundary_gt_pixels: 136183.0000, map/furniture/iou@0.35: 0.4870, map/furniture/iou@0.40: 0.4967, map/furniture/iou@0.45: 0.5044, map/furniture/iou@0.50: 0.5105, map/furniture/iou@0.55: 0.5160, map/furniture/iou@0.60: 0.5202, map/furniture/iou@0.65: 0.5237, map/door/valid_pixels: 8531447.0000, map/door/iou@max: 0.4177, map/door/precision@0.50: 0.5049, map/door/recall@0.50: 0.6944, map/door/f1@0.50: 0.5847, map/door/boundary_precision@0.50: 0.7022, map/door/boundary_recall@0.50: 0.8584, map/door/boundary_f1@0.50: 0.7725, map/door/boundary_gt_pixels: 7571.0000, map/door/iou@0.35: 0.3858, map/door/iou@0.40: 0.3975, map/door/iou@0.45: 0.4065, map/door/iou@0.50: 0.4131, map/door/iou@0.55: 0.4170, map/door/iou@0.60: 0.4177, map/door/iou@0.65: 0.4127, map/clutter/valid_pixels: 8531447.0000, map/clutter/iou@max: 0.3541, map/clutter/precision@0.50: 0.6954, map/clutter/recall@0.50: 0.3760, map/clutter/f1@0.50: 0.4881, map/clutter/boundary_precision@0.50: 0.7740, map/clutter/boundary_recall@0.50: 0.5045, map/clutter/boundary_f1@0.50: 0.6108, map/clutter/boundary_gt_pixels: 147846.0000, map/clutter/iou@0.35: 0.3541, map/clutter/iou@0.40: 0.3460, map/clutter/iou@0.45: 0.3356, map/clutter/iou@0.50: 0.3228, map/clutter/iou@0.55: 0.3075, map/clutter/iou@0.60: 0.2896, map/clutter/iou@0.65: 0.2666, map/mean/iou@0.50: 0.5437, map/mean/iou@max: 0.5574, map/mean/precision@0.50: 0.7107, map/mean/recall@0.50: 0.6958, map/mean/f1@0.50: 0.6848, map/mean/boundary_f1@0.50: 0.7525, robotbev_map_iou_50: 0.5437, robotbev_map_iou_max: 0.5574, robotbev_map_f1_50: 0.6848, robotbev_boundary_f1_50: 0.7525
