@@ -1,0 +1,117 @@
+{
+  "checkpoint": "/output/lightcode/lightnet_b1_bs2/best_robotbev_map_iou_max_epoch_19.pth",
+  "config": "/workspace/configs/robot_bev/seg/b1_lidar_pillar.yaml",
+  "end_to_end": {
+    "latency": {
+      "count": 500,
+      "max": 33.95344316959381,
+      "mean": 29.715454936027527,
+      "min": 25.042910128831863,
+      "p50": 29.462133534252644,
+      "p95": 32.92353614233434,
+      "p99": 33.02176826167852,
+      "timer": "synchronized wall clock",
+      "unit": "ms_per_batch"
+    },
+    "memory": {
+      "after_run_allocated_mb": 155.3271484375,
+      "after_run_device_used_mb": 3158.875,
+      "after_run_reserved_mb": 752.0,
+      "forward_increment_allocated_mb": 250.5517578125,
+      "idle_allocated_mb": 155.3271484375,
+      "idle_device_used_mb": 3158.875,
+      "idle_reserved_mb": 752.0,
+      "peak_allocated_mb": 405.87890625,
+      "peak_reserved_mb": 752.0,
+      "reserved_growth_mb": 0.0
+    },
+    "performance": {
+      "batches_per_second": 33.65252196719973,
+      "frames_per_second": 33.65252196719973,
+      "timed_seconds": 14.857727468013763
+    },
+    "processed_samples": 500,
+    "scope": "preprocessed CPU batch -> GPU scatter -> model inference -> CPU result; excludes acquisition, disk I/O, and dataset transforms",
+    "timed_iterations": 500,
+    "warmup_iterations": 50
+  },
+  "environment": {
+    "cuda_available": true,
+    "cuda_runtime": "11.3",
+    "cudnn": 8200,
+    "gpu": {
+      "compute_capability": "8.9",
+      "index": 0,
+      "name": "NVIDIA L40",
+      "total_memory_mb": 45382.625
+    },
+    "hostname": "6ad90a6c0b36",
+    "platform": "Linux-3.10.0-1160.108.1.el7.x86_64-x86_64-with-glibc2.17",
+    "python": "3.8.13",
+    "pytorch": "1.10.1+cu113"
+  },
+  "model": {
+    "buffer_size_mb": 0.26583099365234375,
+    "model_state_size_mb": 152.7464141845703,
+    "parameter_size_mb": 152.48058319091797,
+    "parameters": 39971867,
+    "trainable_parameters": 39143954
+  },
+  "model_only": {
+    "latency": {
+      "count": 500,
+      "max": 28.580223083496094,
+      "mean": 24.938023670196532,
+      "min": 24.812992095947266,
+      "p50": 24.902735710144043,
+      "p95": 24.9734899520874,
+      "p99": 26.49814168930054,
+      "timer": "CUDA event",
+      "unit": "ms_per_batch"
+    },
+    "memory": {
+      "after_run_allocated_mb": 157.87548828125,
+      "after_run_device_used_mb": 2920.875,
+      "after_run_reserved_mb": 514.0,
+      "forward_increment_allocated_mb": 246.15283203125,
+      "idle_allocated_mb": 157.87548828125,
+      "idle_device_used_mb": 2920.875,
+      "idle_reserved_mb": 514.0,
+      "peak_allocated_mb": 404.0283203125,
+      "peak_reserved_mb": 514.0,
+      "reserved_growth_mb": 0.0
+    },
+    "performance": {
+      "batches_per_second": 40.099408566810425,
+      "frames_per_second": 40.099408566810425,
+      "timed_seconds": 12.469011835098266
+    },
+    "processed_samples": 500,
+    "scope": "pre-scattered GPU batch -> public model inference -> CPU result; excludes CPU-to-GPU input transfer",
+    "timed_iterations": 500,
+    "warmup_iterations": 50
+  },
+  "schema_version": 1,
+  "settings": {
+    "batch_size": 1,
+    "dataset": "RobotBEVDataset",
+    "dataset_samples": 1200,
+    "gpu_id": 0,
+    "mode": "both",
+    "precision": "fp16",
+    "preloaded_batches": 16,
+    "single_stream_synchronous": true,
+    "split": "test",
+    "supervision_included": false,
+    "timed_iterations": 500,
+    "warmup_iterations": 50
+  },
+  "static_memory": {
+    "allocated_mb": 155.3271484375,
+    "device_free_mb": 42861.75,
+    "device_total_mb": 45382.625,
+    "device_used_mb": 2520.875,
+    "reserved_mb": 176.0
+  },
+  "timestamp": "2026-08-05T02:27:32+0000"
+}
