@@ -1,0 +1,16 @@
+{
+  "bad_epochs": 6,
+  "best_epoch": 42,
+  "best_score": 0.5429403781890869,
+  "last_epoch": 48,
+  "last_score": 0.5361047387123108,
+  "min_delta": 0.0001,
+  "monitor": "robotbev_map_iou_max",
+  "patience": 6,
+  "rule": "greater",
+  "schema_version": 1,
+  "start_epoch": 20,
+  "stop_epoch": 48,
+  "stopped": true,
+  "timestamp": "2026-08-06T02:28:58+0000"
+}
