@@ -421,3 +421,52 @@ nvidia-smi -q -d COMPUTE
 
 
 python -c "import torch,time; x=torch.zeros(1,device='cuda'); print(torch.cuda.memory_allocated()/1024**2, torch.cuda.memory_reserved()/1024**2); time.sleep(300)"
+
+
+
+
+I have no name!@24907d2ba057:/workspace$ python tools/test_lidar_degradation.py \                 [13/61]
+>   configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml \
+>   /checkpoint/best_robotbev_map_iou_max_epoch_14.pth \
+>   --degradation region_mask \
+>   --region '{"x_min":1,"x_max":2,"y_min":-0.5,"y_max":0.5}' \
+>   --device cuda:5 \
+>   --num-samples 0 \
+>   --output-dir ./lidar_degradation_results \
+>   --data-root /data/
+Matplotlib created a temporary config/cache directory at /tmp/matplotlib-d26mjpno because the default pa$
+h (/.config/matplotlib) is not a writable directory; it is highly recommended to set the MPLCONFIGDIR en$
+ironment variable to a writable directory, in particular to speed up the import of Matplotlib and to bet$
+er support multiprocessing.
+[Info] Using CUDA device: cuda:5
+[Info] Loaded config: configs/robot_bev/seg/robotbev_camera_lidar_lss.yaml
+[Info] dataset_root override: /data/
+2026-08-18 03:06:49,177 - mmdet - WARNING - No pre-trained weights for SwinTransformer, training start f$om scratch
+load checkpoint from local path: /checkpoint/best_robotbev_map_iou_max_epoch_14.pth
+The model and loaded state dict do not match exactly
+missing keys in source state_dict: encoders.camera.vtransform.dx, encoders.camera.vtransform.bx, encoder$.camera.vtransform.nx, encoders.camera.vtransform.frustum
+
+Traceback (most recent call last):
+  File "tools/test_lidar_degradation.py", line 1233, in <module>
+    main()
+  File "tools/test_lidar_degradation.py", line 1228, in main    tester = LidarDegradationTester(args)
+  File "tools/test_lidar_degradation.py", line 670, in __init__
+    self.model.cuda(),
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 680, in cuda
+    return self._apply(lambda t: t.cuda(device))
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 570, in _apply
+    module._apply(fn)
+  [Previous line repeated 2 more times]
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 593, in _apply
+    param_applied = fn(param)
+  File "/opt/conda/lib/python3.8/site-packages/torch/nn/modules/module.py", line 680, in <lambda>
+    return self._apply(lambda t: t.cuda(device))
+RuntimeError: CUDA error: out of memory
+CUDA kernel errors might be asynchronously reported at some other API call,so the stacktrace below might 
+be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+I have no name!@24907d2ba057:/workspace$
